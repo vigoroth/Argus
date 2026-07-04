@@ -1,0 +1,12 @@
+{
+  "fetch": {
+    "transport": "stdio",
+    "command": "uvx",
+    "args": ["mcp-server-fetch"]
+  },
+  "filesystem": {
+    "transport": "stdio",
+    "command": "/home/vigoroth/.nvm/versions/node/v22.23.1/bin/node",
+    "args": ["/home/vigoroth/.nvm/versions/node/v22.23.1/lib/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "/tmp"]
+  }
+}

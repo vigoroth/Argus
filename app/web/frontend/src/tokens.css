@@ -1,0 +1,52 @@
+/* Odysseus design tokens — lifted from Odysseus.dc.html (DesignSync) */
+:root {
+  --page:      #0b0d10;
+  --shell:     #15181d;
+  --rail:      #0e1014;   /* sidebar + titlebar */
+  --composer:  #0c0e12;
+  --hover:     #181b21;
+  --hair-1:    #1b1e24;
+  --hair-2:    #262b33;
+
+  --violet:    #9b8cff;   /* primary nav */
+  --violet-2:  #7d6cf0;   /* chevrons */
+  --blue:      #5fb4e6;   /* secondary nav */
+  --grad-a:    #c4b5fd;
+  --grad-b:    #7c5cf0;
+  --send-a:    #7c6cf2;
+  --send-b:    #4f3bbf;
+
+  --text:      #d6dae0;
+  --text-2:    #c8ccd2;
+  --muted:     #7b818a;
+  --faint:     #4d535b;
+  --ph:        #5b6168;
+
+  --green:     #5fb84f;
+  --pill-bg:   #11122a;
+  --pill-br:   #2c2a5e;
+  --pill-on:   #221f4c;
+  --pill-fg:   #b3a6ff;
+  --btn-bg:    #15191f;
+
+  /* chart palette — dataviz-validated for surface #15181d */
+  --s-runs:    #d0693f;
+  --s-cost:    #4d94c9;
+  --s-lat:     #9085e9;
+  --ok:        #0ca30c;
+  --crit:      #d03b3b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; }
+body {
+  background: var(--page);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+::placeholder { color: var(--ph); opacity: 1; }
+textarea, input, button, select { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #23272e; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
