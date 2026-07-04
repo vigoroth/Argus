@@ -1,0 +1,8 @@
+#!/bin/sh
+# Block any commit whose message credits Claude/Anthropic as author or co-author.
+if grep -iE 'co-authored-by:.*(claude|anthropic)|generated with \[?claude' "$1" >/dev/null; then
+    echo "commit-msg hook: Claude/Anthropic attribution is not allowed in this repo." >&2
+    echo "Remove the Co-Authored-By / Generated-with line and commit again." >&2
+    exit 1
+fi
+exit 0
