@@ -10,3 +10,4 @@ data/
 *.sqlite-wal
 *:Zone.Identifier
 Screenshot*.png
+CLAUDE.md
