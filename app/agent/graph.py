@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from app.agent.state import AgentState
-from app.agent.summarize import choose_cut, prunable, render_messages
+from app.agent.summarize import choose_cut, count_tokens, prunable, render_messages
 from app.core.llm import get_llm, invoke_tracked
 from app.mcp.client import load_mcp_tools
 from app.tools.graph_query import graph_query
@@ -56,9 +56,11 @@ Do NOT save one-off task details, trivia, or anything not about the user.
 The facts you already know are listed below — don't re-save those."""
 
 
-# Long-thread summarization: once a thread exceeds TRIGGER messages, fold everything
-# older than the KEEP_RECENT most-recent messages into a running summary and prune it
-# from the persisted checkpoint, so the model's working context stays bounded.
+# Long-thread summarization: once a thread exceeds the token budget (or message
+# count as a floor), fold everything older than the KEEP_RECENT most-recent messages
+# into a running summary and prune it from the persisted checkpoint, so the model's
+# working context stays bounded.
+SUMMARY_TRIGGER_TOKENS = 3000
 SUMMARY_TRIGGER_MSGS = 20
 SUMMARY_KEEP_RECENT = 8
 
@@ -74,7 +76,8 @@ def summarize_node(state: AgentState) -> dict:
     """Runs once per user turn (START → summarize → llm). No-op until the thread
     grows past the trigger; then summarizes the older prefix and prunes it."""
     msgs = state["messages"]
-    if len(msgs) <= SUMMARY_TRIGGER_MSGS:
+    # trigger on token budget, with message count as a secondary floor
+    if count_tokens(msgs) <= SUMMARY_TRIGGER_TOKENS and len(msgs) <= SUMMARY_TRIGGER_MSGS:
         return {}
     to_prune = prunable(msgs, choose_cut(msgs, SUMMARY_KEEP_RECENT))
     if not to_prune:

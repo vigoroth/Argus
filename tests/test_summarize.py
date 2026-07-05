@@ -1,7 +1,7 @@
 """Pure summarization helpers in app/agent/summarize.py (no LLM/DB needed)."""
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
-from app.agent.summarize import choose_cut, prunable, render_messages
+from app.agent.summarize import choose_cut, count_tokens, prunable, render_messages
 
 
 def test_render_messages_roles_and_tool_calls():
@@ -36,6 +36,13 @@ def test_choose_cut_never_starts_on_tool_message():
     msgs.append(HumanMessage(content="next", id="8"))
     # keep_recent=2 → natural cut at index 7 (a ToolMessage) → pushed to 8
     assert choose_cut(msgs, 2) == 8
+
+
+def test_count_tokens_grows_with_content():
+    short = [HumanMessage(content="hi", id="1")]
+    long = [HumanMessage(content="word " * 500, id="1")]
+    assert count_tokens(short) >= 0
+    assert count_tokens(long) > count_tokens(short)
 
 
 def test_choose_cut_clamps_to_zero():

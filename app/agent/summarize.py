@@ -20,6 +20,18 @@ def render_messages(messages: list) -> str:
     return "\n".join(lines)
 
 
+def count_tokens(messages: list) -> int:
+    """Approximate token count of the thread, provider-agnostic and keyless.
+    Uses tiktoken's cl100k_base; falls back to a chars/4 heuristic if unavailable.
+    Good enough to drive a summarization threshold, not for billing."""
+    text = render_messages(messages)
+    try:
+        import tiktoken
+        return len(tiktoken.get_encoding("cl100k_base").encode(text))
+    except Exception:
+        return len(text) // 4
+
+
 def choose_cut(messages: list, keep_recent: int) -> int:
     """Index where the kept-verbatim window starts: the last `keep_recent`
     messages, pushed forward so it never begins on a ToolMessage orphaned from

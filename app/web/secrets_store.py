@@ -2,8 +2,10 @@
 from the login-gated dashboard instead of only via .env.
 
 Keys are encrypted with Fernet before hitting Postgres. The Fernet key is derived
-from ARGUS_SESSION_SECRET (already required at boot) — no new managed secret. Note:
-rotating ARGUS_SESSION_SECRET makes existing ciphertext undecryptable; keys can just
+from ARGUS_SECRETS_KEY if set, else from ARGUS_SESSION_SECRET (already required at
+boot) — no new managed secret needed by default. Set the dedicated ARGUS_SECRETS_KEY
+if you want to rotate session cookies without losing stored ciphertext. Rotating
+whichever secret backs the key makes existing ciphertext undecryptable; keys can just
 be re-entered from the dashboard.
 
 The dashboard is write-only: values are never returned over the API — only whether a
@@ -35,8 +37,14 @@ def _conn():
 
 
 def _fernet() -> Fernet:
-    """Derive a stable Fernet key from the session secret."""
-    secret = os.environ.get("ARGUS_SESSION_SECRET") or os.environ.get("NEXUS_SESSION_SECRET", "")
+    """Derive a stable Fernet key. Prefers a dedicated ARGUS_SECRETS_KEY so the
+    encryption lifecycle is independent of session-cookie rotation; falls back to
+    the session secret when it isn't set."""
+    secret = (
+        os.environ.get("ARGUS_SECRETS_KEY")
+        or os.environ.get("ARGUS_SESSION_SECRET")
+        or os.environ.get("NEXUS_SESSION_SECRET", "")
+    )
     digest = hashlib.sha256(secret.encode()).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
