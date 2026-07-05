@@ -2,8 +2,8 @@
 
 Run:  python -m app.rag.rag_demo
 """
-from app.rag.retriever import search
 from app.agent.agent_demo import run_agent
+from app.rag.retriever import search
 
 
 def main() -> None:

@@ -2,8 +2,8 @@
 
 Run:  python -m app.rag.ingest_demo
 """
-from app.rag.loader import load_document
 from app.rag.chunker import chunk_documents
+from app.rag.loader import load_document
 from app.rag.store import add_chunks
 
 

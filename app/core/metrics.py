@@ -1,6 +1,8 @@
 import time
-import psycopg
 from contextlib import contextmanager
+
+import psycopg
+
 from app.core.config import get_settings
 
 
@@ -52,7 +54,8 @@ def get_stats_summary() -> dict:
             "  SELECT COUNT(*) runs, "
             "         COALESCE(AVG(CASE WHEN success THEN 1.0 ELSE 0.0 END), 0) success_rate, "
             "         COALESCE(AVG(duration_ms), 0) avg_ms, "
-            "         COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms), 0) p95_ms, "
+            "         COALESCE(percentile_cont(0.95) WITHIN GROUP "
+            "(ORDER BY duration_ms), 0) p95_ms, "
             "         COALESCE(SUM(input_tokens), 0) input_tokens, "
             "         COALESCE(SUM(output_tokens), 0) output_tokens, "
             "         COALESCE(SUM(cost_usd), 0) cost_usd "

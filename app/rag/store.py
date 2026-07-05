@@ -1,9 +1,8 @@
+from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langchain_postgres import PGVector
-from langchain_core.documents import Document
 
 from app.core.config import get_settings
-
 
 COLLECTION_NAME = "claude_desktop_docs"
 

@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
-from app.memory.long_term import remember, recall_all
+
+from app.memory.long_term import recall_all, remember
 
 
 @tool

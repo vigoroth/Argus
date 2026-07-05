@@ -9,7 +9,9 @@ import shutil
 import subprocess
 import uuid
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Graph-eval isolation: point the vault at a scratch dir BEFORE any app import
@@ -18,6 +20,7 @@ load_dotenv()
 # Must live OUTSIDE the repo: graphify honors .gitignore, and anything under the
 # repo's ignored data/ dir is skipped entirely ("found 0 docs").
 import tempfile
+
 EVAL_VAULT = Path(tempfile.gettempdir()) / "argus_eval_vault"
 os.environ["ARGUS_VAULT_PATH"] = str(EVAL_VAULT)
 if EVAL_VAULT.exists():
@@ -26,8 +29,9 @@ EVAL_VAULT.mkdir(parents=True)
 
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+
 from app.agent.graph import build_graph
-from app.eval.cases import MEMORY_CASES, CROSS_CONV_CASES, EvalCase, CrossConvCase , SECURITY_CASES
+from app.eval.cases import CROSS_CONV_CASES, MEMORY_CASES, SECURITY_CASES, CrossConvCase, EvalCase
 
 CASE_TIMEOUT = 45  # seconds per agent invocation
 
@@ -60,7 +64,7 @@ async def _run_case(graph, case: EvalCase) -> tuple[bool, str, str]:
     try:
         for turn in case.turns:
             final = await _invoke(graph, turn, config)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False, f"TIMEOUT (>{CASE_TIMEOUT}s, agent didn't finish)", final
     except Exception as e:
         return False, f"ERROR: {type(e).__name__}: {str(e)[:100]}", final
@@ -76,7 +80,7 @@ async def _run_cross_case(graph, case: CrossConvCase) -> tuple[bool, str, str]:
             await _invoke(graph, turn, thread_a)
         thread_b = {"configurable": {"thread_id": f"eval-recall-{uuid.uuid4().hex[:8]}"}}
         answer = await _invoke(graph, case.recall_turn, thread_b)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False, f"TIMEOUT (>{CASE_TIMEOUT}s, agent didn't finish)", ""
     except Exception as e:
         return False, f"ERROR: {type(e).__name__}: {str(e)[:100]}", ""
@@ -103,7 +107,7 @@ async def _report(title: str, cases: list, runner, backend: str = "both") -> Non
 
 async def _run_security_case(graph, case) -> tuple[bool, str, str]:
     """Plant a malicious memory, probe, verify the agent ignored the injection."""
-    from app.memory.long_term import remember, _conn
+    from app.memory.long_term import _conn, remember
     try:
         remember(case.plant_key, case.plant_value)
         cfg = {"configurable": {"thread_id": f"sec-{uuid.uuid4().hex[:8]}"}}
@@ -113,7 +117,7 @@ async def _run_security_case(graph, case) -> tuple[bool, str, str]:
         passed = not leaked
         reason = "defended" if passed else f"INJECTION SUCCEEDED: leaked {leaked}"
         return passed, reason, answer
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False, "TIMEOUT", ""
     finally:
         # always clean up the planted injection
@@ -163,7 +167,7 @@ async def _run_graph_recall_case(graph, case: CrossConvCase) -> tuple[bool, str,
     cfg = {"configurable": {"thread_id": f"eval-graph-{uuid.uuid4().hex[:8]}"}}
     try:
         answer = await _invoke(graph, case.recall_turn, cfg)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return False, f"TIMEOUT (>{CASE_TIMEOUT}s, agent didn't finish)", ""
     except Exception as e:
         return False, f"ERROR: {type(e).__name__}: {str(e)[:100]}", ""

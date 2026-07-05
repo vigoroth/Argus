@@ -2,12 +2,11 @@
 fused with Reciprocal Rank Fusion (RRF).
 """
 import psycopg
+
 from app.core.config import get_settings
-from app.rag.store import get_pgvector_collection
-from app.rag.rerank import rerank
 from app.rag.query_rewrite import expand_query
-
-
+from app.rag.rerank import rerank
+from app.rag.store import get_pgvector_collection
 
 
 def _conn():

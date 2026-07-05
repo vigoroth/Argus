@@ -1,6 +1,7 @@
 """Load tools from configured MCP servers (config-driven, resilient, curated)."""
 import json
 from pathlib import Path
+
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 CONFIG_PATH = Path(__file__).parent.parent.parent / "mcp_servers.json"

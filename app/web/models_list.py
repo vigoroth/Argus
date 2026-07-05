@@ -1,9 +1,9 @@
 """List models the user can actually select, queried live per provider."""
 import os
+import re
+
 import httpx
 
-
-import re
 
 async def list_openai_models() -> list[str]:
     """Query OpenAI for chat-capable models, collapsing dated snapshots."""

@@ -1,9 +1,9 @@
 """Query rewriting and multi-query expansion using the LLM.
 Turns a raw user question into focused search queries before retrieval.
 """
-from app.core.llm import get_llm
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 
+from app.core.llm import get_llm
 
 REWRITE_SYSTEM = """You rewrite a user's question into search queries for a \
 document retrieval system. Output ONLY the queries, one per line, no numbering, \

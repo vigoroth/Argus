@@ -1,12 +1,12 @@
 """Simple single-password auth for protecting the Argus instance.
 Password is checked against a bcrypt hash in .env; a signed cookie holds the session.
 """
-import os
-import bcrypt
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-from fastapi import Request, HTTPException
-from fastapi.responses import RedirectResponse
 import hmac
+import os
+
+import bcrypt
+from fastapi import HTTPException, Request
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 
 def _env(name: str) -> str:

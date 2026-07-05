@@ -1,21 +1,16 @@
-from app.mcp.client import load_mcp_tools
-from app.tools.web_search import web_search
-from langgraph.graph import StateGraph, START, END
-from langgraph.prebuilt import ToolNode
+from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage
-from app.tools.os_tools import run_shell
+from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode
+
 from app.agent.state import AgentState
 from app.core.llm import get_llm
-from app.tools.os_tools import OS_TOOLS
-from app.tools.rag_tool import search_documents
-from app.tools.graph_query import graph_query
-from langgraph.checkpoint.sqlite import SqliteSaver
-from app.tools.memory_tools import save_memory, load_memory
-from dotenv import load_dotenv
 from app.mcp.client import load_mcp_tools
-
-
-
+from app.tools.graph_query import graph_query
+from app.tools.memory_tools import load_memory, save_memory
+from app.tools.os_tools import run_shell
+from app.tools.rag_tool import search_documents
+from app.tools.web_search import web_search
 
 load_dotenv()
 
@@ -31,8 +26,9 @@ Tool selection rules:
 - To recall earlier conversations, topics discussed before, or how the user's
   past context connects, use graph_query (the knowledge graph over past chats).
 
-- To read the full contents of a specific web page or URL, use the fetch tool (it retrieves and extracts page content as markdown).
- Use web_search to find pages by topic; use fetch to read a URL you already have.
+- To read the full contents of a specific web page or URL, use the fetch tool
+  (it retrieves and extracts page content as markdown).
+  Use web_search to find pages by topic; use fetch to read a URL you already have.
 
 Think step by step. Be concise. When you answer from search_documents results,
 cite the source numbers like [1], [2].
@@ -93,8 +89,9 @@ async def build_graph(checkpointer=None, model: str | None = None,
             llm = llm.bind_tools(all_tools)
         
         def llm_node(state: AgentState) -> dict:
-                    from app.memory.long_term import recall_all
                     from langchain_core.messages import HumanMessage
+
+                    from app.memory.long_term import recall_all
                     # graph-only backend: no Postgres facts injected either,
                     # otherwise stored facts would contaminate the graph eval
                     facts = {} if memory_backend == "graph" else recall_all()

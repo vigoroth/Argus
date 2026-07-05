@@ -2,8 +2,8 @@
 
 Run:  python -m app.memory.long_term_demo
 """
-from app.memory.long_term import init_memory_table
 from app.agent.agent_demo import run_agent
+from app.memory.long_term import init_memory_table
 
 
 def main() -> None:

@@ -53,6 +53,13 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# These modules must call load_dotenv() / set env vars before importing app
+# modules that resolve settings at import time, and server.py registers the
+# terminal route via a deliberate late import — all legitimate E402.
+"app/web/server.py" = ["E402"]
+"app/eval/runner.py" = ["E402"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

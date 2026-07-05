@@ -9,7 +9,9 @@ so each conversation also gets its own memory.
 Run the demo:  python -m app.web.conversations
 """
 import uuid
+
 import psycopg
+
 from app.core.config import get_settings
 
 

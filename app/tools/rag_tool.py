@@ -1,7 +1,5 @@
 from langchain_core.tools import tool
 
-from app.rag.retriever import search
-
 from app.rag.hybrid import hybrid_search_expanded
 
 

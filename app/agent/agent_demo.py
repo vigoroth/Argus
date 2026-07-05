@@ -2,12 +2,15 @@
 
 Run:  python -m app.agent.agent_demo
 """
-from langchain_core.messages import HumanMessage
-from app.agent.graph import build_graph
 import asyncio
+
+from langchain_core.messages import HumanMessage
+
+from app.agent.graph import build_graph
+from app.core.config import configure_tracing, get_settings
 from app.core.metrics import track
 from app.core.pricing import cost_usd
-from app.core.config import get_settings, configure_tracing
+
 
 async def run_agent(user_input: str) -> str:
     configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
@@ -23,7 +26,6 @@ async def run_agent(user_input: str) -> str:
     return result["messages"][-1].content
 
 def main() -> None:
-    import asyncio
 
     async def run_all():
         print("=== TEST 1: no tools ===")

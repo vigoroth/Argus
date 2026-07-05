@@ -2,7 +2,9 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def chunk_documents(documents: list[Document], chunk_size: int = 1000, chunk_overlap: int = 200) -> list[Document]:
+def chunk_documents(
+    documents: list[Document], chunk_size: int = 1000, chunk_overlap: int = 200
+) -> list[Document]:
     """Chunk a list of documents into smaller pieces.
 
     Args:

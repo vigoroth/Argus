@@ -6,6 +6,7 @@ and calls one. No agent, no graph — just the raw connection.
 Run:  python -m app.mcp.mcp_test
 """
 import asyncio
+
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 

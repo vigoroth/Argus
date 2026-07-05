@@ -53,7 +53,7 @@ def get_graph_data() -> dict:
             count += size
         ids = {n["id"] for n in nodes if n.get("community") in kept}
         nodes = [n for n in nodes if n["id"] in ids]
-        links = [l for l in links if l.get("source") in ids and l.get("target") in ids]
+        links = [lk for lk in links if lk.get("source") in ids and lk.get("target") in ids]
 
     data = {"nodes": nodes, "links": links}
     _graph_cache = (mtime, data)

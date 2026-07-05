@@ -5,8 +5,8 @@ and graphify builds a queryable knowledge graph over the same vault.
 import re
 import shutil
 import subprocess
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 from app.core.config import get_settings
 

@@ -4,31 +4,42 @@ Run:  python -m app.web.server
 Then open http://localhost:8000
 """
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import asyncio
 import json
 import time
-from fastapi import FastAPI, Request, Depends, Form
+
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from pydantic import BaseModel
-from sse_starlette.sse import EventSourceResponse
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from pydantic import BaseModel
+from sse_starlette.sse import EventSourceResponse
+
 from app.agent.graph import build_graph
-from app.web.conversations import (
-    init_tables, create_conversation, list_conversations,
-    add_message, get_messages,
-)
+from app.core.config import configure_tracing, get_settings
+from app.core.metrics import get_stats_summary, init_metrics_table, record_run
+from app.core.pricing import cost_usd
 from app.web.auth import (
-    check_login, make_session_token, valid_session,
-    require_auth, COOKIE_NAME, MAX_AGE,
+    COOKIE_NAME,
+    MAX_AGE,
+    check_login,
+    make_session_token,
+    require_auth,
+    valid_session,
+)
+from app.web.conversations import (
+    add_message,
+    create_conversation,
+    get_messages,
+    init_tables,
+    list_conversations,
 )
 from app.web.models_list import list_all_models
-from app.core.metrics import init_metrics_table, record_run, get_stats_summary
-from app.core.pricing import cost_usd
-from app.core.config import get_settings, configure_tracing
 
 configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
 app = FastAPI(title="Argus")
@@ -74,7 +85,9 @@ def login(username: str = Form(...), password: str = Form(...)):
             max_age=MAX_AGE, httponly=True, samesite="lax",
         )
         return resp
-    return HTMLResponse(LOGIN_HTML.replace("{error}", "Wrong username or password"), status_code=401)
+    return HTMLResponse(
+        LOGIN_HTML.replace("{error}", "Wrong username or password"), status_code=401
+    )
 
 @app.get("/logout")
 def logout():
@@ -141,8 +154,8 @@ def index(request: Request):
 @app.get("/status", dependencies=[Depends(require_auth)])
 def status():
     """Lightweight status for the sidebar dot (graph build state)."""
-    from app.web.vault_writer import graph_build_status
     from app.web.term import term_enabled
+    from app.web.vault_writer import graph_build_status
     return {"graph": graph_build_status(), "term_enabled": term_enabled()}
 
 
@@ -257,8 +270,8 @@ async def chat(req: ChatRequest):
             yield {"event": "done", "data": ""}
             # also write the whole conversation to the Obsidian vault
             try:
-                from app.web.vault_writer import write_conversation, refresh_graph
                 from app.web.conversations import list_conversations
+                from app.web.vault_writer import refresh_graph, write_conversation
 
                 def _vault_sync():
                     msgs = get_messages(conv_id)
@@ -275,6 +288,7 @@ async def chat(req: ChatRequest):
 
 # real local terminal (PTY over WS, auth-gated) — see app/web/term.py
 from app.web.term import terminal_ws
+
 app.add_api_websocket_route("/term", terminal_ws)
 
 # hashed asset bundles from the React build (index.html stays auth-gated above)
@@ -284,8 +298,9 @@ if FRONTEND_DIST.exists():
 
 
 def main() -> None:
-    import uvicorn
     import os
+
+    import uvicorn
     # default localhost-only: the /term endpoint is a real shell behind the login
     host = os.environ.get("ARGUS_BIND") or os.environ.get("NEXUS_BIND", "127.0.0.1")
     uvicorn.run(app, host=host, port=8000)

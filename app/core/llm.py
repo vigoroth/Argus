@@ -7,12 +7,15 @@ constructs a model or reads provider config. Swapping OpenAI <-> local is a
 
 
 from dataclasses import dataclass
+
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+
 # ChatAnthropic / ChatGoogleGenerativeAI are imported lazily inside get_llm so
 # those provider packages are only required when that provider is actually used.
 from app.core.config import get_settings
 from app.core.pricing import cost_usd
-from langchain_core.messages import SystemMessage, HumanMessage 
+
 
 def get_llm(streaming: bool = False, temperature: float = None,
             model: str = None, provider: str = None):

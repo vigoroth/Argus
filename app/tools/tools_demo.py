@@ -3,12 +3,14 @@
 
 Run:  python -m app.tools.tools_demo
 """
-from app.tools.os_tools import read_file, write_file, list_dir, run_shell
+from app.tools.os_tools import list_dir, read_file, run_shell, write_file
 
 
 def main() -> None:
     # write a test file
-    print(write_file.invoke({"path": "/tmp/agent_test.txt", "content": "hello from the agent\nline 2\n"}))
+    print(write_file.invoke(
+        {"path": "/tmp/agent_test.txt", "content": "hello from the agent\nline 2\n"}
+    ))
 
     # read it back
     print(read_file.invoke({"path": "/tmp/agent_test.txt"}))

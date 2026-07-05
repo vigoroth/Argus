@@ -1,4 +1,5 @@
 import psycopg
+
 from app.core.config import get_settings
 
 
@@ -32,5 +33,7 @@ def remember(key: str, value: str) -> None:
 def recall_all() -> dict[str, str]:
     """Return all stored facts as a dict."""
     with _conn() as conn:
-        rows = conn.execute("SELECT key, value FROM user_memory ORDER BY updated_at DESC").fetchall()
+        rows = conn.execute(
+            "SELECT key, value FROM user_memory ORDER BY updated_at DESC"
+        ).fetchall()
     return {k: v for k, v in rows}

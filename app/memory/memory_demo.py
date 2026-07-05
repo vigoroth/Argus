@@ -16,7 +16,9 @@ def main() -> None:
 
         print("=== TURN 1 ===")
         r1 = graph.invoke(
-            {"messages": [HumanMessage(content="My name is Vigoroth and I'm job hunting for ML roles.")]},
+            {"messages": [HumanMessage(
+                content="My name is Vigoroth and I'm job hunting for ML roles."
+            )]},
             config=config,
         )
         print(r1["messages"][-1].content)

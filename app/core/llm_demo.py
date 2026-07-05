@@ -14,7 +14,10 @@ def main() -> None:
     print("\n--- OUTPUT ---")
     print(result.text)
     print("\n--- ACCOUNTING ---")
-    print(f"input={result.input_tokens}  output={result.output_tokens}  cost=${result.cost_usd:.6f}")
+    print(
+        f"input={result.input_tokens}  output={result.output_tokens}  "
+        f"cost=${result.cost_usd:.6f}"
+    )
 
 
 if __name__ == "__main__":
