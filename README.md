@@ -1,8 +1,52 @@
-# Argus
+<div align="center">
 
-A self-hosted, local-first AI agent workspace built from scratch — tool-using agents, advanced retrieval-augmented generation (RAG), persistent memory, web search, Model Context Protocol (MCP) integration, multi-provider model selection, a password-protected streaming chat UI, an evaluation harness, and full observability. Runs on cloud models (OpenAI) or fully offline on local models (Ollama).
+<img src="docs/hero.png" alt="Argus" width="150" />
 
-**Version 1.3**
+<h1>Argus</h1>
+
+<strong><em>Yours for the voyage.</em></strong> ⛵
+
+<p>A self-hosted, local-first AI agent workspace — built from scratch.<br/>
+Tool-using LangGraph agent · advanced RAG · persistent + graph memory · MCP · multi-provider LLMs · streaming web UI · eval harness · full observability.</p>
+
+<p>
+  <img src="https://img.shields.io/badge/License-MIT-7C5CF0?style=for-the-badge" alt="License MIT" />
+  <img src="https://img.shields.io/badge/Version-1.3-7C5CF0?style=for-the-badge" alt="Version 1.3" />
+  <img src="https://img.shields.io/badge/Tests-40%20passing-7C5CF0?style=for-the-badge" alt="Tests 40 passing" />
+  <img src="https://img.shields.io/badge/Local--first-100%25-7C5CF0?style=for-the-badge" alt="Local-first" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white" alt="LangChain" />
+  <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=for-the-badge&logo=langgraph&logoColor=white" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/pgvector-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="pgvector" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white" alt="OpenAI" />
+  <img src="https://img.shields.io/badge/Ollama-000000?style=for-the-badge&logo=ollama&logoColor=white" alt="Ollama" />
+</p>
+
+</div>
+
+---
+
+## Contents
+
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [Multi-provider model selection](#multi-provider-model-selection)
+- [Authentication](#authentication)
+- [Evaluation harness](#evaluation-harness)
+- [Tech stack](#tech-stack)
+- [Quick start](#quick-start)
+- [Running fully local (Ollama)](#running-fully-local-ollama)
+- [Roadmap](#roadmap)
+- [About the author](#about-the-author)
+- [License](#license)
 
 ---
 
@@ -257,12 +301,21 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 
 ---
 
-## Contributors
+## About the author
 
-- [Nick.Kantiotis](https://github.com/vigoroth) — sole author/contributor
+Built from scratch by **Nick Kantiotis** — [@vigoroth](https://github.com/vigoroth).
+
+Argus is a solo, from-the-ground-up exploration of production-shaped agent engineering:
+the async LangGraph ReAct loop, a full advanced-RAG pipeline (hybrid retrieval → RRF →
+cross-encoder rerank → citations), three-tier memory (checkpointer · Postgres · graphify
+knowledge graph), MCP tool integration, a multi-provider LLM layer, a login-gated
+streaming React UI, an eval harness, and end-to-end observability — all wired together and
+containerized as one local-first stack. Sole author and contributor.
+
+<a href="https://github.com/vigoroth"><img src="https://img.shields.io/badge/GitHub-@vigoroth-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub @vigoroth" /></a>
 
 ---
 
 ## License
 
-MIT
+Released under the **MIT License** — © Nick Kantiotis.
