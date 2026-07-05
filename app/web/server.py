@@ -31,6 +31,7 @@ from app.core.metrics import (
     record_run,
 )
 from app.core.pricing import cost_usd
+from app.memory.long_term import init_memory_table
 from app.web.auth import (
     COOKIE_NAME,
     MAX_AGE,
@@ -118,6 +119,7 @@ async def models():
 
 
 # persistent async checkpointer for per-conversation memory (built lazily)
+Path("data").mkdir(exist_ok=True)  # sqlite checkpointer dir (gitignored, absent on fresh clones)
 _checkpointer_cm = AsyncSqliteSaver.from_conn_string("data/web_memory.sqlite")
 CHECKPOINTER = None
 GRAPHS = {}  # model_name -> compiled graph
@@ -142,6 +144,7 @@ async def get_graph(model: str | None = None, provider: str | None = None,
 init_tables()
 init_metrics_table()
 init_activity_table()
+init_memory_table()
 init_secrets_table()
 apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
 
@@ -244,6 +247,9 @@ def _activity_and_usage(node_out: dict) -> tuple[list[dict], int, int]:
     entries ({'kind','text'} — tool calls / results) and tally token usage."""
     events: list[dict] = []
     in_tokens = out_tokens = 0
+    # a no-op node (e.g. summarize below its trigger) streams a None/empty update
+    if not node_out:
+        return events, in_tokens, out_tokens
     for msg in node_out.get("messages", []):
         tool_calls = getattr(msg, "tool_calls", None)
         if tool_calls:
