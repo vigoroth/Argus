@@ -125,6 +125,29 @@ ruff check .
 
 ## Quick start
 
+### Run the whole stack in Docker (one command)
+
+```bash
+cp .env.example .env          # fill in ARGUS_USERNAME / PASSWORD_HASH / SESSION_SECRET
+docker compose -f docker/docker-compose.yml up --build
+# app on http://localhost:8000 (login-gated), Postgres+pgvector, Grafana
+```
+The `app` image builds the React frontend and bundles the Python runtime (plus
+`node`/`uv` for the MCP servers); Postgres auto-creates the `vector` extension on first
+boot. After the first RAG ingest, add the FTS index once (the embedding table is created
+lazily by pgvector):
+```bash
+docker exec argus_pg psql -U argus -d argus -c "
+ALTER TABLE langchain_pg_embedding ADD COLUMN IF NOT EXISTS fts tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', document)) STORED;
+CREATE INDEX IF NOT EXISTS idx_fts ON langchain_pg_embedding USING GIN (fts);"
+```
+The in-container `/term` shell stays disabled by default (it would be a shell into the
+container). Provider API keys can be set at runtime from the login-gated **API Keys**
+dashboard instead of `.env`.
+
+For local (non-container) development, use the manual setup below.
+
 ### Prerequisites
 - Python 3.11+, Docker
 - Node.js 20+ and `uv` (for MCP servers)
@@ -230,7 +253,7 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Encrypted API-key dashboard (write-only, login-gated; keys applied live)
 - [x] Activity log (tool calls / results streamed live and persisted per conversation)
 - [x] Conversation summarization for long threads (running summary + checkpoint pruning)
-- [ ] Containerize the app itself (one-command full stack)
+- [x] Containerize the app itself (one-command full stack)
 
 ---
 

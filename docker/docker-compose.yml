@@ -10,6 +10,32 @@ services:
       - "5434:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # auto-creates the pgvector extension on first init
+      - ./init:/docker-entrypoint-initdb.d:ro
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: argus_app
+    depends_on:
+      - postgres
+    ports:
+      - "8000:8000"
+    environment:
+      # reach Postgres over the compose network (service name + internal port 5432)
+      DATABASE_URL: postgresql+psycopg://argus:argus_dev_pw@postgres:5432/argus
+      ARGUS_BIND: 0.0.0.0
+      # auth secrets pass through from the host env (see .env.example)
+      ARGUS_USERNAME: ${ARGUS_USERNAME:-}
+      ARGUS_PASSWORD_HASH: ${ARGUS_PASSWORD_HASH:-}
+      ARGUS_SESSION_SECRET: ${ARGUS_SESSION_SECRET:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # NOTE: the /term shell stays disabled — term_enabled() requires
+      # ARGUS_TERM_ALLOW_REMOTE=1 when bind is not localhost, which we do not set.
+    volumes:
+      - model_cache:/app/model_cache
+      - app_data:/app/data
 
   grafana:
     image: grafana/grafana:latest
@@ -27,3 +53,5 @@ services:
 volumes:
   pgdata:
   grafana_data:
+  model_cache:
+  app_data:

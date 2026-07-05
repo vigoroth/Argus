@@ -1,0 +1,12 @@
+.git
+.env
+**/__pycache__/
+*.pyc
+*.egg-info/
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+app/web/frontend/node_modules/
+app/web/frontend/dist/
+CLAUDE.md
