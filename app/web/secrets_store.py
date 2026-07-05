@@ -15,7 +15,6 @@ import base64
 import hashlib
 import os
 
-import psycopg
 from cryptography.fernet import Fernet
 
 from app.core.config import get_settings
@@ -29,6 +28,8 @@ PROVIDERS = {
 
 
 def _conn():
+    import psycopg  # lazy so the crypto helpers import without the DB driver present
+
     url = get_settings().database_url.replace("postgresql+psycopg://", "postgresql://")
     return psycopg.connect(url)
 

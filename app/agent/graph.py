@@ -4,6 +4,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from app.agent.state import AgentState
+from app.agent.summarize import choose_cut, prunable, render_messages
 from app.core.llm import get_llm, invoke_tracked
 from app.mcp.client import load_mcp_tools
 from app.tools.graph_query import graph_query
@@ -69,41 +70,19 @@ SUMMARY_SYSTEM = (
 )
 
 
-def _render_messages(messages: list) -> str:
-    """Flatten messages into a compact transcript for the summarizer."""
-    lines = []
-    for m in messages:
-        role = {"HumanMessage": "user", "AIMessage": "assistant",
-                "ToolMessage": "tool", "SystemMessage": "system"}.get(
-                    type(m).__name__, "msg")
-        content = m.content if isinstance(m.content, str) else str(m.content)
-        tool_calls = getattr(m, "tool_calls", None)
-        if tool_calls:
-            names = ", ".join(tc.get("name", "?") for tc in tool_calls)
-            content = (content + f" [called: {names}]").strip()
-        if content:
-            lines.append(f"{role}: {content}")
-    return "\n".join(lines)
-
-
 def summarize_node(state: AgentState) -> dict:
     """Runs once per user turn (START → summarize → llm). No-op until the thread
     grows past the trigger; then summarizes the older prefix and prunes it."""
     msgs = state["messages"]
     if len(msgs) <= SUMMARY_TRIGGER_MSGS:
         return {}
-    # keep the last KEEP_RECENT verbatim; extend the cut forward so the kept window
-    # never starts on a ToolMessage orphaned from its AIMessage tool_calls
-    cut = len(msgs) - SUMMARY_KEEP_RECENT
-    while cut < len(msgs) and type(msgs[cut]).__name__ == "ToolMessage":
-        cut += 1
-    to_prune = [m for m in msgs[:cut] if getattr(m, "id", None)]
+    to_prune = prunable(msgs, choose_cut(msgs, SUMMARY_KEEP_RECENT))
     if not to_prune:
         return {}
     prior = state.get("summary") or ""
     prompt = (
         f"Existing summary:\n{prior or '(none)'}\n\n"
-        f"New messages to fold in:\n{_render_messages(to_prune)}\n\n"
+        f"New messages to fold in:\n{render_messages(to_prune)}\n\n"
         "Return the updated summary."
     )
     try:
