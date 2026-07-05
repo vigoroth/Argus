@@ -15,3 +15,4 @@ export const Menu = (p: P) => <I {...p}><path d="M3 6h18M3 12h18M3 18h18"/></I>
 export const ChevronDown = (p: P) => <I {...p}><polyline points="6 9 12 15 18 9"/></I>
 export const ChevronRight = (p: P) => <I {...p}><polyline points="9 18 15 12 9 6"/></I>
 export const ArrowUp = (p: P) => <I {...p}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></I>
+export const Key = (p: P) => <I {...p}><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="M18 5l2 2"/><path d="M15 8l2 2"/></I>

@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react'
 import type { Conversation } from '../api'
 import { relTime } from '../api'
-import { Plus, Search, ChatBubble, Globe, Bars, Term, Menu, ChevronDown, ChevronRight } from './Icons'
+import { Plus, Search, ChatBubble, Globe, Bars, Term, Key, Menu, ChevronDown, ChevronRight } from './Icons'
 
-export type View = 'chat' | 'graph' | 'stats' | 'terminal'
+export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'settings'
 
 const row: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 13, padding: '9px 11px',
@@ -98,6 +98,8 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
                 </span>}/>
         <NavRow color="var(--blue)" icon={<Bars/>} label="Stats" active={view === 'stats'}
                 onClick={() => onView('stats')}/>
+        <NavRow color="var(--blue)" icon={<Key/>} label="API Keys" active={view === 'settings'}
+                onClick={() => onView('settings')}/>
         {termEnabled && (
           <NavRow color="var(--blue)" icon={<Term/>} label="Terminal" active={view === 'terminal'}
                   onClick={() => onView('terminal')}/>

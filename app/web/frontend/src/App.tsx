@@ -7,6 +7,7 @@ import StatsView from './components/StatsView'
 // heavy views load on demand (three.js / xterm stay out of the initial bundle)
 const GraphView = lazy(() => import('./components/GraphView'))
 const TerminalView = lazy(() => import('./components/TerminalView'))
+const KeysView = lazy(() => import('./components/KeysView'))
 import type { ActivityEntry, Conversation, Message, ModelsByProvider } from './api'
 import { getActivity, getConversations, getMessages, getModels, getStatus, streamChat } from './api'
 import { ChevronDown } from './components/Icons'
@@ -145,6 +146,7 @@ export default function App() {
           <Suspense fallback={<div style={{ padding: 40, color: 'var(--muted)' }}>loading ...</div>}>
             {view === 'graph' && <GraphView/>}
             {view === 'stats' && <StatsView/>}
+            {view === 'settings' && <KeysView/>}
             {view === 'terminal' && termEnabled && <TerminalView/>}
           </Suspense>
         </main>

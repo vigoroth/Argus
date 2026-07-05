@@ -13,7 +13,7 @@ import asyncio
 import json
 import time
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -47,6 +47,13 @@ from app.web.conversations import (
     list_conversations,
 )
 from app.web.models_list import list_all_models
+from app.web.secrets_store import (
+    PROVIDERS,
+    apply_secrets,
+    init_secrets_table,
+    secret_status,
+    set_secret,
+)
 
 configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
 app = FastAPI(title="Argus")
@@ -135,6 +142,8 @@ async def get_graph(model: str | None = None, provider: str | None = None,
 init_tables()
 init_metrics_table()
 init_activity_table()
+init_secrets_table()
+apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
 
 
 class ChatRequest(BaseModel):
@@ -143,6 +152,11 @@ class ChatRequest(BaseModel):
     model: str | None = None
     provider: str | None = None
     mode: str = "agent"  # "agent" (tools) | "chat" (plain LLM)
+
+
+class SecretRequest(BaseModel):
+    provider: str
+    key: str
 
 
 FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
@@ -183,6 +197,24 @@ def conversation_messages(conv_id: str):
 def conversation_activity(conv_id: str):
     """Return the persisted activity log (tool calls / results) for a conversation."""
     return get_activity(conv_id)
+
+
+@app.get("/secrets", dependencies=[Depends(require_auth)])
+def secrets_status():
+    """Which providers have a key set (write-only — values never leave the server)."""
+    return secret_status()
+
+
+@app.post("/secrets", dependencies=[Depends(require_auth)])
+def secrets_set(req: SecretRequest):
+    """Encrypt + store one provider key, then apply it live (env + Settings + graph cache)."""
+    if req.provider not in PROVIDERS:
+        raise HTTPException(status_code=400, detail="unknown provider")
+    if not req.key.strip():
+        raise HTTPException(status_code=400, detail="empty key")
+    set_secret(req.provider, req.key.strip())
+    apply_secrets(GRAPHS)
+    return {"ok": True}
 
 
 @app.get("/graph", dependencies=[Depends(require_auth)])

@@ -18,10 +18,23 @@ const j = async <T,>(url: string): Promise<T> => {
   return r.json()
 }
 
+const postJson = async <T,>(url: string, body: unknown): Promise<T> => {
+  const r = await fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  })
+  if (r.status === 401 || r.redirected) { window.location.href = '/login'; throw new Error('auth') }
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
 export const getConversations = () => j<Conversation[]>('/conversations')
 export const getMessages = (id: string) => j<Message[]>('/conversations/' + id)
 export const getActivity = (id: string) => j<ActivityEntry[]>('/conversations/' + id + '/activity')
 export const getModels = () => j<ModelsByProvider>('/models')
+export type SecretStatus = Record<string, boolean>
+export const getSecrets = () => j<SecretStatus>('/secrets')
+export const setSecret = (provider: string, key: string) =>
+  postJson<{ ok: boolean }>('/secrets', { provider, key })
 export const getGraph = () => j<{ nodes: never[]; links: never[] }>('/graph')
 export const getStats = () => j<Stats>('/stats')
 export const getStatus = () => j<{ graph: string; term_enabled: boolean }>('/status')
