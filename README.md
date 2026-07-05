@@ -79,7 +79,7 @@ The web UI is protected by a single-user login gate:
 - Sessions use **signed, time-limited cookies** (itsdangerous), httponly.
 - All API routes require a valid session; unauthenticated requests are rejected.
 
-Credentials live in `.env` (`NEXUS_USERNAME`, `NEXUS_PASSWORD_HASH`, `NEXUS_SESSION_SECRET`) — only the hash is stored, so the password is never recoverable from disk.
+Credentials live in `.env` (`ARGUS_USERNAME`, `ARGUS_PASSWORD_HASH`, `ARGUS_SESSION_SECRET` — legacy `NEXUS_*` names still work as a fallback) — only the hash is stored, so the password is never recoverable from disk.
 
 ---
 
@@ -145,11 +145,11 @@ git config core.hooksPath .githooks   # enable repo hooks (blocks AI-attribution
 ### Configure `.env`
 ```
 OPENAI_API_KEY=sk-...
-DATABASE_URL=postgresql+psycopg://claude:claude_dev_pw@localhost:5434/claude_desktop
-# auth
-NEXUS_USERNAME=your-name
-NEXUS_PASSWORD_HASH=<bcrypt hash>      # python -c "import bcrypt;print(bcrypt.hashpw(b'pw',bcrypt.gensalt()).decode())"
-NEXUS_SESSION_SECRET=<random hex>      # python -c "import secrets;print(secrets.token_hex(32))"
+DATABASE_URL=postgresql+psycopg://argus:argus_dev_pw@localhost:5434/argus
+# auth (legacy NEXUS_* names still work as a fallback)
+ARGUS_USERNAME=your-name
+ARGUS_PASSWORD_HASH=<bcrypt hash>      # python -c "import bcrypt;print(bcrypt.hashpw(b'pw',bcrypt.gensalt()).decode())"
+ARGUS_SESSION_SECRET=<random hex>      # python -c "import secrets;print(secrets.token_hex(32))"
 # optional providers
 ANTHROPIC_API_KEY=
 GOOGLE_API_KEY=
@@ -160,7 +160,7 @@ GOOGLE_API_KEY=
 docker compose -f docker/docker-compose.yml up -d
 # Postgres (pgvector) on :5434, Grafana on http://localhost:3001
 
-docker exec claude_desktop_pg psql -U claude -d claude_desktop -c "
+docker exec argus_pg psql -U argus -d argus -c "
 CREATE EXTENSION IF NOT EXISTS vector;
 ALTER TABLE IF EXISTS langchain_pg_embedding
   ADD COLUMN IF NOT EXISTS fts tsvector
@@ -179,9 +179,9 @@ CREATE INDEX IF NOT EXISTS idx_fts ON langchain_pg_embedding USING GIN (fts);
 ```bash
 pipx install graphifyy              # the graphify CLI
 pipx inject graphifyy openai        # semantic extraction needs the openai client
-mkdir -p "$NEXUS_VAULT_PATH"        # vault graphify indexes (default ~/vault)
+mkdir -p "$ARGUS_VAULT_PATH"        # vault graphify indexes (default ~/vault)
 ```
-Conversations are written to `$NEXUS_VAULT_PATH` and re-indexed on each turn by
+Conversations are written to `$ARGUS_VAULT_PATH` and re-indexed on each turn by
 `refresh_graph` (`app/web/vault_writer.py`), which shells out to `graphify extract`.
 That build calls an LLM, so `OPENAI_API_KEY` must be set in `.env` — the extract
 subprocess inherits the app's environment. The agent reads the graph via the
@@ -203,7 +203,7 @@ python -m app.eval.runner          # run the memory eval harness
 python -m app.web.server           # launch chat UI at http://127.0.0.1:8000 (login required)
 ```
 The server binds **127.0.0.1** by default because the built-in Terminal is a real
-shell on the host (login-gated). Set `NEXUS_BIND=0.0.0.0` to expose on the LAN —
+shell on the host (login-gated). Set `ARGUS_BIND=0.0.0.0` to expose on the LAN —
 only with strong credentials.
 
 ---

@@ -4,7 +4,7 @@ from langchain_postgres import PGVector
 
 from app.core.config import get_settings
 
-COLLECTION_NAME = "claude_desktop_docs"
+COLLECTION_NAME = "argus_docs"
 
 
 def get_pgvector_collection() -> PGVector:

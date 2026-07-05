@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     google_api_key: str = ""
-    database_url: str = "postgresql+psycopg://claude:claude_dev_pw@localhost:5434/claude_desktop"
+    database_url: str = "postgresql+psycopg://argus:argus_dev_pw@localhost:5434/argus"
     # ARGUS_VAULT_PATH is the current name; NEXUS_VAULT_PATH still works for back-compat.
     argus_vault_path: str = Field(
         default=str(Path.home() / "vault"),

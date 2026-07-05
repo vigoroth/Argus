@@ -1,11 +1,11 @@
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: claude_desktop_pg
+    container_name: argus_pg
     environment:
-      POSTGRES_USER: claude
-      POSTGRES_PASSWORD: claude_dev_pw
-      POSTGRES_DB: claude_desktop
+      POSTGRES_USER: argus
+      POSTGRES_PASSWORD: argus_dev_pw
+      POSTGRES_DB: argus
     ports:
       - "5434:5432"
     volumes:
@@ -13,7 +13,7 @@ services:
 
   grafana:
     image: grafana/grafana:latest
-    container_name: claude_desktop_grafana
+    container_name: argus_grafana
     ports:
       - "3001:3000"
     environment:
