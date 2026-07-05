@@ -1,17 +1,24 @@
 import { useEffect, useRef } from 'react'
-import type { Message } from '../api'
+import type { ActivityEntry, Message } from '../api'
 
 export default function ChatView({ messages, streaming, activity }: {
-  messages: Message[]; streaming: string; activity: string
+  messages: Message[]; streaming: string; activity: ActivityEntry[]
 }) {
   const boxRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef(true)
+  const logRef = useRef<HTMLDivElement>(null)
 
   // stick to bottom only if the reader is already there
   useEffect(() => {
     const el = boxRef.current
     if (el && stickRef.current) el.scrollTop = el.scrollHeight
   }, [messages, streaming])
+
+  // activity log always follows the newest entry
+  useEffect(() => {
+    const el = logRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [activity])
 
   const empty = messages.length === 0 && !streaming
 
@@ -62,10 +69,23 @@ export default function ChatView({ messages, streaming, activity }: {
           </div>
         </div>
       )}
-      <div style={{ minHeight: 20, padding: '0 36px', maxWidth: 1030, margin: '0 auto',
-                    width: '100%', color: 'var(--faint)', fontSize: 12, fontStyle: 'italic' }}>
-        {activity && '⚙ ' + activity}
-      </div>
+      {activity.length > 0 && (
+        <div ref={logRef}
+             style={{ maxHeight: 116, overflowY: 'auto', padding: '6px 36px 8px',
+                      maxWidth: 1030, margin: '0 auto', width: '100%' }}>
+          {activity.map((a, i) => (
+            <div key={i}
+                 style={{ display: 'flex', gap: 8, alignItems: 'baseline',
+                          color: a.kind === 'error' ? 'var(--grad-a)' : 'var(--faint)',
+                          fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                          lineHeight: 1.7, whiteSpace: 'nowrap', overflow: 'hidden',
+                          textOverflow: 'ellipsis' }}>
+              <span style={{ opacity: .7 }}>⚙</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

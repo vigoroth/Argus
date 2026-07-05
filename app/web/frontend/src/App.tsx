@@ -7,8 +7,8 @@ import StatsView from './components/StatsView'
 // heavy views load on demand (three.js / xterm stay out of the initial bundle)
 const GraphView = lazy(() => import('./components/GraphView'))
 const TerminalView = lazy(() => import('./components/TerminalView'))
-import type { Conversation, Message, ModelsByProvider } from './api'
-import { getConversations, getMessages, getModels, getStatus, streamChat } from './api'
+import type { ActivityEntry, Conversation, Message, ModelsByProvider } from './api'
+import { getActivity, getConversations, getMessages, getModels, getStatus, streamChat } from './api'
 import { ChevronDown } from './components/Icons'
 
 export default function App() {
@@ -19,7 +19,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [models, setModels] = useState<ModelsByProvider>({})
   const [streaming, setStreaming] = useState('')
-  const [activity, setActivity] = useState('')
+  const [activity, setActivity] = useState<ActivityEntry[]>([])
   const [busy, setBusy] = useState(false)
   const [graphStatus, setGraphStatus] = useState('idle')
   const [termEnabled, setTermEnabled] = useState(false)
@@ -54,12 +54,15 @@ export default function App() {
   const openConv = useCallback(async (id: string) => {
     setConvId(id)
     setView('chat')
-    setMessages(await getMessages(id))
+    const [msgs, act] = await Promise.all([getMessages(id), getActivity(id).catch(() => [])])
+    setMessages(msgs)
+    setActivity(act)
   }, [])
 
   const newChat = useCallback(() => {
     setConvId(null)
     setMessages([])
+    setActivity([])
     setView('chat')
   }, [])
 
@@ -81,9 +84,9 @@ export default function App() {
             pendingRef.current += t
             if (!rafRef.current) rafRef.current = requestAnimationFrame(flush)
           },
-          onActivity: a => setActivity(a),
-          onDone: () => setActivity(''),
-          onError: e => setActivity('error: ' + e),
+          onActivity: a => setActivity(l => [...l, a]),
+          onDone: () => {},   // keep the turn's log; it persists per-conversation
+          onError: e => setActivity(l => [...l, { kind: 'error', text: 'error: ' + e }]),
         },
       )
     } catch { /* onError already surfaced it */ }

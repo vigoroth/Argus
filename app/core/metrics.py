@@ -31,6 +31,48 @@ def init_metrics_table() -> None:
         conn.execute("ALTER TABLE run_metrics ADD COLUMN IF NOT EXISTS model TEXT")
 
 
+def init_activity_table() -> None:
+    """Create the activity_events table (one row per tool call / result), so the
+    per-conversation activity log survives a page reload."""
+    with _conn() as conn:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS activity_events ("
+            "id SERIAL PRIMARY KEY, "
+            "conversation_id TEXT, "
+            "ts TIMESTAMPTZ DEFAULT now(), "
+            "kind TEXT, "
+            "text TEXT)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_activity_conv "
+            "ON activity_events (conversation_id, id)"
+        )
+
+
+def record_activity(conversation_id: str, entries: list[dict]) -> None:
+    """Persist one turn's activity events (each {'kind','text'}) for a conversation."""
+    if not entries:
+        return
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO activity_events (conversation_id, kind, text) "
+                "VALUES (%s, %s, %s)",
+                [(conversation_id, e.get("kind", "info"), e.get("text", "")) for e in entries],
+            )
+
+
+def get_activity(conversation_id: str) -> list[dict]:
+    """Return a conversation's activity events, oldest first."""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT kind, text, ts FROM activity_events "
+            "WHERE conversation_id = %s ORDER BY id",
+            (conversation_id,),
+        ).fetchall()
+    return [{"kind": r[0], "text": r[1], "ts": str(r[2])} for r in rows]
+
+
 def record_run(label, duration_ms, input_tokens, output_tokens, cost_usd, success,
                error=None, conversation_id=None, model=None):
     """Write one run's metrics to Postgres."""

@@ -228,7 +228,7 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Auto-memory: remember conversations and recall context automatically
 - [x] Obsidian vault + graphify knowledge graph, queried via the graph_query tool
 - [ ] Encrypted API-key dashboard (write-only, login-gated)
-- [ ] Activity log (surface tool calls / retrievals / memory ops live)
+- [x] Activity log (tool calls / results streamed live and persisted per conversation)
 - [ ] Conversation summarization for long threads
 - [ ] Containerize the app itself (one-command full stack)
 

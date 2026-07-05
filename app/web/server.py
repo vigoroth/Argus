@@ -22,7 +22,14 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import build_graph
 from app.core.config import configure_tracing, get_settings
-from app.core.metrics import get_stats_summary, init_metrics_table, record_run
+from app.core.metrics import (
+    get_activity,
+    get_stats_summary,
+    init_activity_table,
+    init_metrics_table,
+    record_activity,
+    record_run,
+)
 from app.core.pricing import cost_usd
 from app.web.auth import (
     COOKIE_NAME,
@@ -127,6 +134,7 @@ async def get_graph(model: str | None = None, provider: str | None = None,
 
 init_tables()
 init_metrics_table()
+init_activity_table()
 
 
 class ChatRequest(BaseModel):
@@ -171,6 +179,12 @@ def conversation_messages(conv_id: str):
     return get_messages(conv_id)
 
 
+@app.get("/conversations/{conv_id}/activity", dependencies=[Depends(require_auth)])
+def conversation_activity(conv_id: str):
+    """Return the persisted activity log (tool calls / results) for a conversation."""
+    return get_activity(conv_id)
+
+
 @app.get("/graph", dependencies=[Depends(require_auth)])
 def knowledge_graph():
     """Serve the graphify knowledge graph (networkx node-link JSON) over the
@@ -187,19 +201,30 @@ def stats():
     return get_stats_summary()
 
 
+def _snippet(value, limit: int = 80) -> str:
+    """Compact one-line preview of tool args or a tool result."""
+    s = " ".join(str(value).split())
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
+
 def _activity_and_usage(node_out: dict) -> tuple[list[dict], int, int]:
-    """From one LangGraph node's 'updates' output: build activity SSE events
-    (tool calls / tool results) and tally token usage from any AI messages."""
+    """From one LangGraph node's 'updates' output: build structured activity
+    entries ({'kind','text'} — tool calls / results) and tally token usage."""
     events: list[dict] = []
     in_tokens = out_tokens = 0
     for msg in node_out.get("messages", []):
         tool_calls = getattr(msg, "tool_calls", None)
         if tool_calls:
             for tc in tool_calls:
-                events.append({"event": "activity", "data": json.dumps(f"calling {tc['name']}")})
+                args = tc.get("args") or {}
+                arg_str = _snippet(args) if args else ""
+                text = f"→ {tc['name']}({arg_str})" if arg_str else f"→ {tc['name']}"
+                events.append({"kind": "tool_call", "text": text})
         if type(msg).__name__ == "ToolMessage":
             name = getattr(msg, "name", "tool")
-            events.append({"event": "activity", "data": json.dumps(f"{name} returned")})
+            result = _snippet(getattr(msg, "content", ""))
+            text = f"← {name}: {result}" if result else f"← {name} returned"
+            events.append({"kind": "tool_result", "text": text})
         usage = getattr(msg, "usage_metadata", None)
         if usage:
             in_tokens += usage.get("input_tokens", 0)
@@ -217,6 +242,7 @@ async def chat(req: ChatRequest):
     async def event_generator():
             yield {"event": "conversation", "data": conv_id}
             full_reply = ""
+            activity_log: list[dict] = []  # this turn's tool calls/results, persisted below
             # per-run metrics (latency, tokens, cost) → run_metrics table
             t0 = time.perf_counter()
             in_tokens = out_tokens = 0
@@ -244,10 +270,13 @@ async def chat(req: ChatRequest):
                             in_tokens += dt_in
                             out_tokens += dt_out
                             for ev in events:
-                                yield ev
+                                activity_log.append(ev)
+                                yield {"event": "activity", "data": json.dumps(ev)}
             except Exception as e:
                 run_error = str(e)
-                yield {"event": "activity", "data": json.dumps(f"error: {run_error[:120]}")}
+                err_ev = {"kind": "error", "text": f"error: {run_error[:120]}"}
+                activity_log.append(err_ev)
+                yield {"event": "activity", "data": json.dumps(err_ev)}
             finally:
                 # metrics + persisting the reply are independent writes — run them
                 # concurrently instead of back-to-back thread hops
@@ -261,10 +290,16 @@ async def chat(req: ChatRequest):
                 ))
                 save_task = asyncio.create_task(
                     asyncio.to_thread(add_message, conv_id, "assistant", full_reply))
+                activity_task = asyncio.create_task(
+                    asyncio.to_thread(record_activity, conv_id, activity_log))
                 try:
                     await metrics_task  # metrics must never break chat
                 except Exception as e:
                     print(f"metrics write skipped: {e}")
+                try:
+                    await activity_task  # activity log must never break chat
+                except Exception as e:
+                    print(f"activity write skipped: {e}")
                 await save_task
             # let the client render the reply now; persistence below is housekeeping
             yield {"event": "done", "data": ""}

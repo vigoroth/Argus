@@ -3,6 +3,7 @@ import { fetchEventSource } from '@microsoft/fetch-event-source'
 
 export type Conversation = { id: string; title: string; updated_at: string }
 export type Message = { role: string; content: string; created_at?: string }
+export type ActivityEntry = { kind: string; text: string; ts?: string }
 export type ModelsByProvider = Record<string, string[]>
 export type Stats = {
   totals: { runs: number; success_rate: number; avg_ms: number; p95_ms: number;
@@ -19,6 +20,7 @@ const j = async <T,>(url: string): Promise<T> => {
 
 export const getConversations = () => j<Conversation[]>('/conversations')
 export const getMessages = (id: string) => j<Message[]>('/conversations/' + id)
+export const getActivity = (id: string) => j<ActivityEntry[]>('/conversations/' + id + '/activity')
 export const getModels = () => j<ModelsByProvider>('/models')
 export const getGraph = () => j<{ nodes: never[]; links: never[] }>('/graph')
 export const getStats = () => j<Stats>('/stats')
@@ -27,7 +29,7 @@ export const getStatus = () => j<{ graph: string; term_enabled: boolean }>('/sta
 export type StreamHandlers = {
   onConversation: (id: string) => void
   onToken: (t: string) => void
-  onActivity: (a: string) => void
+  onActivity: (a: ActivityEntry) => void
   onDone: () => void
   onError: (e: string) => void
 }
