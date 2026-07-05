@@ -15,7 +15,7 @@ from langchain_core.tools import tool
 
 from app.core.config import get_settings
 
-VAULT_PATH = Path(get_settings().nexus_vault_path)
+VAULT_PATH = Path(get_settings().argus_vault_path)
 GRAPH_JSON = VAULT_PATH / "graphify-out" / "graph.json"
 
 # cache the parsed graph.json by mtime — /graph and graph_query hit this often
@@ -60,8 +60,8 @@ def get_graph_data() -> dict:
     return data
 
 # graphify query stdout lines look like:
-#   NODE Nexus [src=Nexus.md loc=None community=12]
-#   EDGE Nexus --references [EXTRACTED]--> RAG
+#   NODE Argus [src=Argus.md loc=None community=12]
+#   EDGE Argus --references [EXTRACTED]--> RAG
 _NODE_RE = re.compile(r"^NODE\s+(?P<name>.+?)\s+\[src=(?P<src>.*?)\s+loc=")
 _EDGE_RE = re.compile(r"^EDGE\s+(?P<a>.+?)\s+--(?P<rel>.+?)\s+\[.*?\]-->\s+(?P<b>.+?)\s*$")
 

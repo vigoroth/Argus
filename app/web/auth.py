@@ -1,4 +1,4 @@
-"""Simple single-password auth for protecting the Nexus instance.
+"""Simple single-password auth for protecting the Argus instance.
 Password is checked against a bcrypt hash in .env; a signed cookie holds the session.
 """
 import os
@@ -8,10 +8,19 @@ from fastapi import Request, HTTPException
 from fastapi.responses import RedirectResponse
 import hmac
 
-USERNAME = os.environ["NEXUS_USERNAME"]
-PASSWORD_HASH = os.environ["NEXUS_PASSWORD_HASH"].encode()
-SESSION_SECRET = os.environ["NEXUS_SESSION_SECRET"]
-COOKIE_NAME = "nexus_session"
+
+def _env(name: str) -> str:
+    """Read ARGUS_<name>, falling back to the legacy NEXUS_<name>."""
+    val = os.environ.get(f"ARGUS_{name}") or os.environ.get(f"NEXUS_{name}")
+    if val is None:
+        raise KeyError(f"ARGUS_{name} (or NEXUS_{name}) not set")
+    return val
+
+
+USERNAME = _env("USERNAME")
+PASSWORD_HASH = _env("PASSWORD_HASH").encode()
+SESSION_SECRET = _env("SESSION_SECRET")
+COOKIE_NAME = "argus_session"
 MAX_AGE = 60 * 60 * 24 * 7  # 7 days
 
 _serializer = URLSafeTimedSerializer(SESSION_SECRET)

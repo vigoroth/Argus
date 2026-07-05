@@ -1,4 +1,4 @@
-"""Write Nexus conversations to an Obsidian vault as markdown notes.
+"""Write Argus conversations to an Obsidian vault as markdown notes.
 Each conversation becomes one .md file; Obsidian's graph view visualizes them,
 and graphify builds a queryable knowledge graph over the same vault.
 """
@@ -10,7 +10,7 @@ from datetime import datetime
 
 from app.core.config import get_settings
 
-VAULT_PATH = Path(get_settings().nexus_vault_path)
+VAULT_PATH = Path(get_settings().argus_vault_path)
 CONV_DIR = VAULT_PATH / "Conversations"
 
 # debounce state for graph refresh: one extract at a time, min spacing
@@ -36,7 +36,7 @@ def write_conversation(conv_id: str, title: str, messages: list[dict]) -> None:
 
         lines = [f"# {title}", f"*{datetime.now():%Y-%m-%d %H:%M}*", ""]
         for m in messages:
-            who = "You" if m["role"] == "user" else "Nexus"
+            who = "You" if m["role"] == "user" else "Argus"
             lines.append(f"**{who}:** {m['content']}")
             lines.append("")
         path.write_text("\n".join(lines), encoding="utf-8")

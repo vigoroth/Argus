@@ -1,9 +1,8 @@
 .env
-.env
-.env.example
 
 __pycache__/
 *.pyc
+*.egg-info/
 data/
 *.sqlite
 *.sqlite-shm

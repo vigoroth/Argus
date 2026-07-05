@@ -25,7 +25,7 @@ export default function ChatView({ messages, streaming, activity }: {
             <span style={{ fontSize: 54, fontWeight: 700, letterSpacing: 1,
                            background: 'linear-gradient(180deg,var(--grad-a),var(--grad-b))',
                            WebkitBackgroundClip: 'text', backgroundClip: 'text',
-                           color: 'transparent' }}>Nexus</span>
+                           color: 'transparent' }}>Argus</span>
           </div>
           <div style={{ color: 'var(--muted)', fontSize: 15, letterSpacing: .3 }}>Yours for the voyage.</div>
           <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', maxWidth: 420,

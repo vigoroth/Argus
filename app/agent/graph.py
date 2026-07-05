@@ -20,7 +20,7 @@ from app.mcp.client import load_mcp_tools
 load_dotenv()
 
 
-SYSTEM_PROMPT = """You are a helpful personal AI assistant named Friday with access to tools.
+SYSTEM_PROMPT = """You are a helpful personal AI assistant named Argus with access to tools.
 
 Tool selection rules:
 - For anything about the user's OWN notes, documents, saved advice, or "my

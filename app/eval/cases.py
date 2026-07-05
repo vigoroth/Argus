@@ -80,9 +80,9 @@ CrossConvCase(
     ),
     CrossConvCase(
         name="x_recall_project",
-        store_turns=["Important: my main project is called Nexus. Save this to memory."],
+        store_turns=["Important: my main project is called Helios. Save this to memory."],
         recall_turn="What is my main project called? Look in memory.",
-        expect_any=["Nexus"],
+        expect_any=["Helios"],
     ),
     CrossConvCase(
         name="x_recall_tool",

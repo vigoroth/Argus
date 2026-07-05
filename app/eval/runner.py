@@ -18,8 +18,8 @@ load_dotenv()
 # Must live OUTSIDE the repo: graphify honors .gitignore, and anything under the
 # repo's ignored data/ dir is skipped entirely ("found 0 docs").
 import tempfile
-EVAL_VAULT = Path(tempfile.gettempdir()) / "nexus_eval_vault"
-os.environ["NEXUS_VAULT_PATH"] = str(EVAL_VAULT)
+EVAL_VAULT = Path(tempfile.gettempdir()) / "argus_eval_vault"
+os.environ["ARGUS_VAULT_PATH"] = str(EVAL_VAULT)
 if EVAL_VAULT.exists():
     shutil.rmtree(EVAL_VAULT)
 EVAL_VAULT.mkdir(parents=True)
@@ -173,6 +173,8 @@ async def _run_graph_recall_case(graph, case: CrossConvCase) -> tuple[bool, str,
 
 def main() -> None:
     async def all_evals():
+        # single-conversation recall: tell the agent a fact, then ask in the same thread
+        await _report("MEMORY — SINGLE-CONV", MEMORY_CASES, _run_case)
         # the comparison: identical cross-conversation cases, each memory backend
         await _report("CROSS-CONV — POSTGRES", CROSS_CONV_CASES, _run_cross_case, "postgres")
         if _seed_graph_vault(CROSS_CONV_CASES):

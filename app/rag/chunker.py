@@ -18,7 +18,7 @@ def chunk_documents(documents: list[Document], chunk_size: int = 1000, chunk_ove
         chunk_overlap=chunk_overlap,
         length_function=len,
     )
-    return splitter.split_documents(documents)
+    chunks = splitter.split_documents(documents)
 
     # tag each chunk with its index so we can trace it back later
     for i, c in enumerate(chunks):

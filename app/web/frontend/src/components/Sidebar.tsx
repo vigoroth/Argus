@@ -54,7 +54,7 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '4px 22px 22px' }}>
         <span style={{ cursor: 'pointer', color: 'var(--violet)' }} onClick={onToggle}><Menu size={22}/></span>
-        <span style={{ color: 'var(--violet)', fontWeight: 700, fontSize: 16, letterSpacing: .5 }}>Nexus</span>
+        <span style={{ color: 'var(--violet)', fontWeight: 700, fontSize: 16, letterSpacing: .5 }}>Argus</span>
       </div>
 
       <nav style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column',

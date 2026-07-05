@@ -36,7 +36,7 @@ export default function Composer({ models, disabled, onSend, onTerminal, termEna
                     border: '1px solid var(--hair-2)', borderRadius: 16,
                     padding: '18px 20px 14px', boxShadow: '0 8px 30px rgba(0,0,0,.35)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-          <textarea ref={taRef} rows={1} placeholder="Message Nexus ..." value={msg}
+          <textarea ref={taRef} rows={1} placeholder="Message Argus ..." value={msg}
             onChange={e => {
               setMsg(e.target.value)
               const t = e.target; t.style.height = 'auto'

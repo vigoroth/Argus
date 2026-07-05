@@ -28,11 +28,13 @@ from app.web.auth import (
 from app.web.models_list import list_all_models
 from app.core.metrics import init_metrics_table, record_run, get_stats_summary
 from app.core.pricing import cost_usd
-from app.core.config import get_settings
-app = FastAPI(title="Nexus")
+from app.core.config import get_settings, configure_tracing
+
+configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
+app = FastAPI(title="Argus")
 
 LOGIN_HTML = """
-<!doctype html><html><head><title>Nexus — Login</title>
+<!doctype html><html><head><title>Argus — Login</title>
 <style>
   body{background:#121212;color:#e8e8e8;font-family:system-ui;display:flex;
        align-items:center;justify-content:center;height:100vh;margin:0}
@@ -45,7 +47,7 @@ LOGIN_HTML = """
   .err{color:#e06c6c;font-size:13px;height:16px}
 </style></head><body>
 <form method="post" action="/login">
-  <h2>Nexus</h2>
+  <h2>Argus</h2>
   <input type="text" name="username" placeholder="Username" autofocus>
   <input type="password" name="password" placeholder="Password">
   <div class="err">{error}</div>
@@ -285,7 +287,7 @@ def main() -> None:
     import uvicorn
     import os
     # default localhost-only: the /term endpoint is a real shell behind the login
-    host = os.environ.get("NEXUS_BIND", "127.0.0.1")
+    host = os.environ.get("ARGUS_BIND") or os.environ.get("NEXUS_BIND", "127.0.0.1")
     uvicorn.run(app, host=host, port=8000)
 
 

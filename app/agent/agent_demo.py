@@ -7,9 +7,10 @@ from app.agent.graph import build_graph
 import asyncio
 from app.core.metrics import track
 from app.core.pricing import cost_usd
-from app.core.config import get_settings
+from app.core.config import get_settings, configure_tracing
 
 async def run_agent(user_input: str) -> str:
+    configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
     graph = await build_graph()
     with track("agent_run") as m:
         result = await graph.ainvoke({"messages": [HumanMessage(content=user_input)]})

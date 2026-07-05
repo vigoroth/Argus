@@ -1,9 +1,9 @@
 """Real local terminal over WebSocket: auth-gated PTY running bash.
 
-Security: this hands a real shell on the host to anyone holding a valid Nexus
+Security: this hands a real shell on the host to anyone holding a valid Argus
 session cookie. The WS handshake re-validates the signed session cookie, and
-the server binds 127.0.0.1 by default (see server.main). When NEXUS_BIND is
-non-local the endpoint is disabled entirely unless NEXUS_TERM_ALLOW_REMOTE=1
+the server binds 127.0.0.1 by default (see server.main). When ARGUS_BIND is
+non-local the endpoint is disabled entirely unless ARGUS_TERM_ALLOW_REMOTE=1
 is set explicitly. Treat the login credentials accordingly.
 """
 import asyncio
@@ -27,10 +27,11 @@ def _valid_ws_session(ws: WebSocket) -> bool:
 
 def term_enabled() -> bool:
     """Shell endpoint is localhost-only unless explicitly opted into."""
-    bind = os.environ.get("NEXUS_BIND", "127.0.0.1")
+    bind = os.environ.get("ARGUS_BIND") or os.environ.get("NEXUS_BIND", "127.0.0.1")
     if bind in ("127.0.0.1", "localhost", "::1"):
         return True
-    return os.environ.get("NEXUS_TERM_ALLOW_REMOTE") == "1"
+    return (os.environ.get("ARGUS_TERM_ALLOW_REMOTE")
+            or os.environ.get("NEXUS_TERM_ALLOW_REMOTE")) == "1"
 
 
 async def terminal_ws(ws: WebSocket) -> None:

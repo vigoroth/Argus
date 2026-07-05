@@ -44,6 +44,51 @@ async def list_ollama_models() -> list[str]:
         return [] # Ollama not running / not installed — fine
 
 
+async def list_anthropic_models() -> list[str]:
+    """Query Anthropic for available models (only if a key is set)."""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                "https://api.anthropic.com/v1/models",
+                headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+            )
+            r.raise_for_status()
+            data = r.json().get("data", [])
+        return sorted(m["id"] for m in data)
+    except Exception as e:
+        print(f"Anthropic model list failed: {e}")
+        return []
+
+
+async def list_gemini_models() -> list[str]:
+    """Query Google for Gemini models that support generateContent."""
+    key = os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                params={"key": key},
+            )
+            r.raise_for_status()
+            data = r.json().get("models", [])
+        # names look like "models/gemini-2.0-flash"; keep chat-capable, strip prefix
+        models = [
+            m["name"].removeprefix("models/")
+            for m in data
+            if "generateContent" in m.get("supportedGenerationMethods", [])
+            and "gemini" in m["name"]
+        ]
+        return sorted(set(models))
+    except Exception as e:
+        print(f"Gemini model list failed: {e}")
+        return []
+
+
 async def list_all_models() -> dict[str, list[str]]:
     """Return {provider: [models]} for providers we can reach."""
     result = {}
@@ -53,5 +98,10 @@ async def list_all_models() -> dict[str, list[str]]:
     ollama = await list_ollama_models()
     if ollama:
         result["ollama"] = ollama
-    # anthropic/gemini: add here when keys exist (their list APIs)
+    anthropic = await list_anthropic_models()
+    if anthropic:
+        result["anthropic"] = anthropic
+    gemini = await list_gemini_models()
+    if gemini:
+        result["gemini"] = gemini
     return result

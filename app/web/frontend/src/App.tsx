@@ -113,7 +113,7 @@ export default function App() {
         <div style={{ flex: 1, height: 30, background: 'var(--hover)', borderRadius: 8,
                       border: '1px solid #23272e', display: 'flex', alignItems: 'center',
                       justifyContent: 'center', color: 'var(--faint)', fontSize: 12 }}>
-          nexus · localhost:8000
+          argus · localhost:8000
         </div>
       </div>
 

@@ -8,8 +8,8 @@ constructs a model or reads provider config. Swapping OpenAI <-> local is a
 
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
-#from langchain_anthropic import ChatAnthropic
-#from langchain_google_genai import ChatGoogleGenerativeAI
+# ChatAnthropic / ChatGoogleGenerativeAI are imported lazily inside get_llm so
+# those provider packages are only required when that provider is actually used.
 from app.core.config import get_settings
 from app.core.pricing import cost_usd
 from langchain_core.messages import SystemMessage, HumanMessage 
@@ -55,6 +55,12 @@ def get_llm(streaming: bool = False, temperature: float = None,
             )    
 
     # existing OpenAI / Ollama path (provider == "openai" or "ollama")
+
+    if provider == "openai" and not settings.openai_api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not set — required for provider 'openai'. "
+            "Set it in .env, or use a local provider (LLM_PROVIDER=ollama)."
+        )
 
     return ChatOpenAI(
         model=model,
