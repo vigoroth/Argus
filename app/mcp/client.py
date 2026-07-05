@@ -4,6 +4,10 @@ from pathlib import Path
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
+from app.core.logging_config import get_logger
+
+log = get_logger("argus.mcp.client")
+
 CONFIG_PATH = Path(__file__).parent.parent.parent / "mcp_servers.json"
 
 # Curate which tools to keep per server. A server NOT listed here = keep all its tools.
@@ -24,12 +28,12 @@ MCP_TOOL_ALLOWLIST = {
 
 def _load_config() -> dict:
     if not CONFIG_PATH.exists():
-        print(f"WARNING: {CONFIG_PATH} not found")
+        log.warning("%s not found", CONFIG_PATH)
         return {}
     try:
         return json.loads(CONFIG_PATH.read_text())
     except Exception as e:
-        print(f"WARNING: could not read {CONFIG_PATH}: {e}")
+        log.warning("could not read %s: %s", CONFIG_PATH, e)
         return {}
 
 
@@ -46,8 +50,8 @@ async def load_mcp_tools() -> list:
             allow = MCP_TOOL_ALLOWLIST.get(name)
             if allow is not None:
                 tools = [t for t in tools if t.name in allow]
-            print(f"MCP '{name}': loaded {len(tools)} tools")
+            log.info("MCP '%s': loaded %d tools", name, len(tools))
             all_tools.extend(tools)
         except Exception as e:
-            print(f"MCP '{name}' FAILED: {type(e).__name__}: {str(e)[:200]}")
+            log.error("MCP '%s' FAILED: %s: %s", name, type(e).__name__, str(e)[:200])
     return all_tools

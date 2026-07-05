@@ -20,6 +20,9 @@ import os
 from cryptography.fernet import Fernet
 
 from app.core.config import get_settings
+from app.core.logging_config import get_logger
+
+log = get_logger("argus.web.secrets_store")
 
 # provider -> (env var read by models_list.py / subprocesses, Settings field read by llm.py)
 PROVIDERS = {
@@ -83,7 +86,11 @@ def _all_secrets() -> dict[str, str]:
         try:
             out[provider] = _fernet().decrypt(bytes(ciphertext)).decode()
         except Exception:
-            continue  # unreadable (e.g. session secret rotated) — skip
+            # unreadable (e.g. the secret backing the Fernet key was rotated).
+            # Surface it — silent loss looks identical to "no key set".
+            log.warning("stored '%s' key is undecryptable (secret rotated?) — "
+                        "skipping; re-enter it from the dashboard.", provider)
+            continue
     return out
 
 
