@@ -229,7 +229,7 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Obsidian vault + graphify knowledge graph, queried via the graph_query tool
 - [ ] Encrypted API-key dashboard (write-only, login-gated)
 - [x] Activity log (tool calls / results streamed live and persisted per conversation)
-- [ ] Conversation summarization for long threads
+- [x] Conversation summarization for long threads (running summary + checkpoint pruning)
 - [ ] Containerize the app itself (one-command full stack)
 
 ---

@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import RemoveMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from app.agent.state import AgentState
-from app.core.llm import get_llm
+from app.core.llm import get_llm, invoke_tracked
 from app.mcp.client import load_mcp_tools
 from app.tools.graph_query import graph_query
 from app.tools.memory_tools import load_memory, save_memory
@@ -55,6 +55,66 @@ Do NOT save one-off task details, trivia, or anything not about the user.
 The facts you already know are listed below — don't re-save those."""
 
 
+# Long-thread summarization: once a thread exceeds TRIGGER messages, fold everything
+# older than the KEEP_RECENT most-recent messages into a running summary and prune it
+# from the persisted checkpoint, so the model's working context stays bounded.
+SUMMARY_TRIGGER_MSGS = 20
+SUMMARY_KEEP_RECENT = 8
+
+SUMMARY_SYSTEM = (
+    "You maintain a running summary of an ongoing conversation between a user and an "
+    "AI assistant. Given the existing summary and the next slice of messages, return a "
+    "single updated summary that preserves durable facts, decisions, open threads, and "
+    "user preferences. Be concise; drop pleasantries and redundant back-and-forth."
+)
+
+
+def _render_messages(messages: list) -> str:
+    """Flatten messages into a compact transcript for the summarizer."""
+    lines = []
+    for m in messages:
+        role = {"HumanMessage": "user", "AIMessage": "assistant",
+                "ToolMessage": "tool", "SystemMessage": "system"}.get(
+                    type(m).__name__, "msg")
+        content = m.content if isinstance(m.content, str) else str(m.content)
+        tool_calls = getattr(m, "tool_calls", None)
+        if tool_calls:
+            names = ", ".join(tc.get("name", "?") for tc in tool_calls)
+            content = (content + f" [called: {names}]").strip()
+        if content:
+            lines.append(f"{role}: {content}")
+    return "\n".join(lines)
+
+
+def summarize_node(state: AgentState) -> dict:
+    """Runs once per user turn (START → summarize → llm). No-op until the thread
+    grows past the trigger; then summarizes the older prefix and prunes it."""
+    msgs = state["messages"]
+    if len(msgs) <= SUMMARY_TRIGGER_MSGS:
+        return {}
+    # keep the last KEEP_RECENT verbatim; extend the cut forward so the kept window
+    # never starts on a ToolMessage orphaned from its AIMessage tool_calls
+    cut = len(msgs) - SUMMARY_KEEP_RECENT
+    while cut < len(msgs) and type(msgs[cut]).__name__ == "ToolMessage":
+        cut += 1
+    to_prune = [m for m in msgs[:cut] if getattr(m, "id", None)]
+    if not to_prune:
+        return {}
+    prior = state.get("summary") or ""
+    prompt = (
+        f"Existing summary:\n{prior or '(none)'}\n\n"
+        f"New messages to fold in:\n{_render_messages(to_prune)}\n\n"
+        "Return the updated summary."
+    )
+    try:
+        result = invoke_tracked(prompt, system=SUMMARY_SYSTEM)
+    except Exception as e:  # summarization must never break the chat turn
+        print(f"summarization skipped: {e}")
+        return {}
+    removals = [RemoveMessage(id=m.id) for m in to_prune]
+    return {"summary": result.text, "messages": removals}
+
+
 async def build_graph(checkpointer=None, model: str | None = None,
                       provider: str | None = None,
                       memory_backend: str = "both",
@@ -98,6 +158,12 @@ async def build_graph(checkpointer=None, model: str | None = None,
 
                     messages = [SystemMessage(content=SYSTEM_PROMPT)]
 
+                    # running summary of older, pruned turns (trusted — we generated it)
+                    summary = state.get("summary")
+                    if summary:
+                        messages.append(SystemMessage(
+                            content="[SUMMARY OF EARLIER CONVERSATION]\n" + summary))
+
                     if facts:
                         known = "\n".join(f"- {k}: {v}" for k, v in facts.items())
                         # Inject stored memory as UNTRUSTED user-role data, never system.
@@ -125,8 +191,10 @@ async def build_graph(checkpointer=None, model: str | None = None,
             return "end"
 
         graph = StateGraph(AgentState)
+        graph.add_node("summarize", summarize_node)
         graph.add_node("llm", llm_node)
-        graph.add_edge(START, "llm")
+        graph.add_edge(START, "summarize")
+        graph.add_edge("summarize", "llm")
 
         if all_tools:
             # ToolNode handles running the actual tool functions and
