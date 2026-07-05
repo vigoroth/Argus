@@ -1,6 +1,6 @@
-# Nexus — Architecture
+# Argus — Architecture
 
-This document explains how Nexus is built and how the pieces connect. It's written for someone reading the codebase for the first time (including future me).
+This document explains how Argus is built and how the pieces connect. It's written for someone reading the codebase for the first time (including future me).
 
 ## Design principles
 
@@ -14,7 +14,7 @@ This document explains how Nexus is built and how the pieces connect. It's writt
 
 ## The agent loop
 
-Nexus uses the ReAct pattern (Reason + Act) implemented as a LangGraph state machine:
+Argus uses the ReAct pattern (Reason + Act) implemented as a LangGraph state machine:
 
 ```
 START → llm_node → should_continue? → tools_node → (loop back to llm_node)
@@ -67,11 +67,11 @@ Streaming works by calling `graph.stream(..., stream_mode="messages")` with a st
 
 ## Observability
 
-`core/metrics.py` provides a `track()` context manager that times a block and records duration, tokens, cost, and success/failure to a `run_metrics` table — even on error. `run_agent` wraps every call in it. Grafana reads the table and renders cost, latency (p95), run count, and error rate.
+`core/metrics.py` provides a `track()` context manager that times a block and records duration, tokens, cost, and success/failure to a `run_metrics` table — even on error. `run_agent` wraps every call in it; the web `/chat` path records the same fields inline. `get_stats_summary()` aggregates the table (lifetime totals, 14-day daily series, last-20 runs) and the app's own `/stats` view (`StatsView.tsx`) renders it — this is the live observability surface. A Grafana container ships in Docker Compose for ad-hoc querying of the same table but is not provisioned with dashboards.
 
 ## Infrastructure
 
-`docker/docker-compose.yml` runs Postgres (with pgvector) and Grafana. Grafana's Postgres data source is provisioned as code in `docker/grafana/provisioning/`. The application currently runs in the local Python environment; containerizing the app itself (one-command full stack) is on the roadmap.
+`docker/docker-compose.yml` runs Postgres (with pgvector) and Grafana. Grafana is unprovisioned — no datasource or dashboards are committed; the app's built-in `/stats` view is the primary metrics surface. The application currently runs in the local Python environment; containerizing the app itself (one-command full stack) is on the roadmap.
 
 ## Data flow (one message, end to end)
 
@@ -84,5 +84,5 @@ user types in UI
       → llm_node produces the final answer, streamed token by token
   → SSE streams tokens to the browser (live)
   → user + assistant messages saved to Postgres
-  → run metrics recorded → Grafana
+  → run metrics recorded → /stats view
 ```

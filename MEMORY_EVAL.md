@@ -1,6 +1,6 @@
 # Memory Backend Evaluation: Postgres vs. MemPalace
 
-> **Historical.** MemPalace has since been removed from Nexus. Graph memory is now
+> **Historical.** MemPalace has since been removed from Argus. Graph memory is now
 > provided by the Obsidian vault + graphify combo (conversations → vault → graphify
 > knowledge graph, queried via the native `graph_query` tool). This writeup is kept
 > for the Postgres findings and the eval-isolation lesson below; the `mempalace`
@@ -8,7 +8,7 @@
 > the graphify knowledge graph, see **Postgres vs. graph memory** at the end.
 
 ## Question
-Nexus has two long-term memory options: a simple Postgres key-value store
+Argus has two long-term memory options: a simple Postgres key-value store
 (hand-built `save_memory` / `load_memory`) and the MemPalace MCP server
 (semantic "drawer" storage with embedding search). Which should the agent
 use for remembering discrete user facts?
@@ -82,7 +82,7 @@ This is itself a useful finding: persistent backends leak state across eval
 runs, and an eval harness for stateful systems must control for it.
 
 ## Decision
-Nexus's automatic fact-memory ("remember on its own") is built on **Postgres**,
+Argus's automatic fact-memory ("remember on its own") is built on **Postgres**,
 chosen for its cold-start reliability — it recalls a fact the instant it is
 stored, with no dependence on accumulated density. MemPalace remains a viable
 option once a store is well-populated, and a candidate for semantic/thematic

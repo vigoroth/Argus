@@ -17,7 +17,7 @@ Argus is an autonomous AI agent that can:
 - **Answer from your own documents** — advanced RAG: hybrid search (semantic + keyword), Reciprocal Rank Fusion, cross-encoder reranking, and LLM query expansion, with citations.
 - **Remember you** — short-term conversation memory (per thread), long-term memory (Postgres), plus a knowledge-graph memory: conversations are written to an Obsidian vault and graphify builds a queryable graph over them, exposed to the agent through the native `graph_query` tool. Memory is verified by an eval harness.
 - **Be protected** — the web UI sits behind a username + password login gate (bcrypt-hashed credentials, signed session cookies).
-- **Monitor itself** — every run records latency, tokens, cost, and success to Postgres, surfaced in Grafana.
+- **Monitor itself** — every run records latency, tokens, cost, and success to Postgres, surfaced in the built-in `/stats` dashboard.
 - **Chat like a real app** — streaming web UI with a conversation sidebar; past chats persist and reopen.
 
 ---
@@ -51,7 +51,7 @@ Argus is an autonomous AI agent that can:
 │  Eval harness: single + cross-conversation memory tests   │
 │                with per-case timeouts                     │
 ├──────────────────────────────────────────────────────────┤
-│  Observability: per-run metrics → Postgres → Grafana      │
+│  Observability: per-run metrics → Postgres → /stats view  │
 ├──────────────────────────────────────────────────────────┤
 │  Infra: Docker Compose (Postgres/pgvector + Grafana)      │
 └──────────────────────────────────────────────────────────┘
@@ -92,6 +92,16 @@ Memory is measured, not assumed. The eval harness (`app/eval/`) runs:
 
 Each case has a per-case timeout so a stuck run fails cleanly rather than hanging. The current Postgres-memory baseline passes all cases (8/8). The harness is the basis for benchmarking memory backends against each other.
 
+### Unit tests
+
+Fast, service-free unit tests (pricing, config, chunking, RRF fusion, auth, provider dispatch) live in `tests/` and run without Postgres or API keys:
+
+```bash
+pip install -e . --group dev   # pytest/ruff
+pytest                         # unit suite (DB-dependent tests skip if psycopg absent)
+ruff check .
+```
+
 ---
 
 ## Tech stack
@@ -108,7 +118,7 @@ Each case has a per-case timeout so a stuck run fails cleanly rather than hangin
 | Memory | LangGraph async SQLite checkpointer (short) · Postgres (long) · Obsidian vault + graphify graph (MCP) |
 | Web backend | FastAPI + SSE (async) |
 | Auth | bcrypt + itsdangerous signed cookies |
-| Observability | Custom metrics → Postgres → Grafana |
+| Observability | Custom metrics → Postgres → built-in `/stats` view (Grafana available, unprovisioned) |
 | Infrastructure | Docker Compose |
 
 ---
@@ -124,14 +134,10 @@ Each case has a per-case timeout so a stuck run fails cleanly rather than hangin
 ```bash
 git clone https://github.com/vigoroth/Argus.git
 cd Argus
-conda create -n nexus python=3.11 -y
-conda activate nexus
-pip install langchain langchain-openai langchain-anthropic langchain-google-genai \
-            langgraph langchain-core langgraph-checkpoint-sqlite aiosqlite \
-            langchain-postgres langchain-community langchain-experimental \
-            "psycopg[binary]" pypdf pydantic pydantic-settings python-dotenv \
-            tiktoken openai ddgs sentence-transformers fastapi "uvicorn[standard]" \
-            sse-starlette langchain-mcp-adapters bcrypt itsdangerous httpx
+conda create -n argus python=3.11 -y
+conda activate argus
+pip install -e .          # all runtime deps from pyproject.toml
+# pip install -e . --group dev   # + pytest/ruff for development
 cp .env.example .env
 git config core.hooksPath .githooks   # enable repo hooks (blocks AI-attribution trailers)
 ```
@@ -166,7 +172,7 @@ CREATE INDEX IF NOT EXISTS idx_fts ON langchain_pg_embedding USING GIN (fts);
 ### MCP servers (optional but recommended)
 ```bash
 # fetch + filesystem need no install (uvx/npx fetch on first use)
-# servers are declared in mcp_servers.json (use absolute npx path for filesystem under WSL)
+# servers are declared in mcp_servers.json (uvx/npx resolve on first use; client fail-softs if missing)
 ```
 
 ### Knowledge graph (graphify + Obsidian vault)
