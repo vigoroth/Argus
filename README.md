@@ -11,7 +11,7 @@ Tool-using LangGraph agent · advanced RAG · persistent + graph memory · MCP �
 
 <p>
   <img src="https://img.shields.io/badge/License-MIT-7C5CF0?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/badge/Version-1.3-7C5CF0?style=for-the-badge" alt="Version 1.3" />
+  <img src="https://img.shields.io/badge/Version-1.4-7C5CF0?style=for-the-badge" alt="Version 1.4" />
   <img src="https://img.shields.io/badge/Tests-40%20passing-7C5CF0?style=for-the-badge" alt="Tests 40 passing" />
   <img src="https://img.shields.io/badge/Local--first-100%25-7C5CF0?style=for-the-badge" alt="Local-first" />
 </p>
