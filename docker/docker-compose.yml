@@ -47,6 +47,8 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - grafana_data:/var/lib/grafana
+      # auto-provisioned Postgres datasource + run-metrics dashboard
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - postgres
 

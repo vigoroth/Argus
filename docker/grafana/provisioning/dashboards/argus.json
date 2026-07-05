@@ -1,0 +1,107 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "schemaVersion": 39,
+  "title": "Argus — run metrics",
+  "uid": "argus-run-metrics",
+  "tags": ["argus"],
+  "time": { "from": "now-14d", "to": "now" },
+  "timezone": "",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Chat runs (total)",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS runs FROM run_metrics WHERE label = 'chat';"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Success rate",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT avg(CASE WHEN success THEN 1.0 ELSE 0.0 END) AS success_rate FROM run_metrics WHERE label = 'chat';"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total cost (USD)",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT coalesce(sum(cost_usd), 0) AS cost FROM run_metrics WHERE label = 'chat';"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Runs per day",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(ts, '1d'), count(*) AS runs FROM run_metrics WHERE label = 'chat' AND $__timeFilter(ts) GROUP BY 1 ORDER BY 1;"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "p95 latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(ts, '1d'), percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms FROM run_metrics WHERE label = 'chat' AND $__timeFilter(ts) GROUP BY 1 ORDER BY 1;"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Cost per day (USD)",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD" }, "overrides": [] },
+      "datasource": { "type": "postgres", "uid": "argus-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(ts, '1d'), coalesce(sum(cost_usd), 0) AS cost FROM run_metrics WHERE label = 'chat' AND $__timeFilter(ts) GROUP BY 1 ORDER BY 1;"
+        }
+      ]
+    }
+  ]
+}

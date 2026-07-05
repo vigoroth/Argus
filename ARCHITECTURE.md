@@ -71,7 +71,7 @@ Streaming works by calling `graph.stream(..., stream_mode="messages")` with a st
 
 ## Infrastructure
 
-`docker/docker-compose.yml` runs Postgres (with pgvector) and Grafana. Grafana is unprovisioned — no datasource or dashboards are committed; the app's built-in `/stats` view is the primary metrics surface. The application currently runs in the local Python environment; containerizing the app itself (one-command full stack) is on the roadmap.
+`docker/docker-compose.yml` runs the app, Postgres (with pgvector), and Grafana as one stack. Grafana is auto-provisioned from `docker/grafana/provisioning` — a Postgres datasource and a run-metrics dashboard (runs, success rate, p95 latency, cost) are committed; the app's built-in `/stats` view remains the in-app metrics surface. The app is containerized via `docker/Dockerfile` (multi-stage: React build → Python runtime); `docker compose up --build` brings up the full stack.
 
 ## Data flow (one message, end to end)
 

@@ -118,7 +118,7 @@ ruff check .
 | Memory | LangGraph async SQLite checkpointer (short) · Postgres (long) · Obsidian vault + graphify graph (MCP) |
 | Web backend | FastAPI + SSE (async) |
 | Auth | bcrypt + itsdangerous signed cookies |
-| Observability | Custom metrics → Postgres → built-in `/stats` view (Grafana available, unprovisioned) |
+| Observability | Custom metrics → Postgres → built-in `/stats` view + auto-provisioned Grafana dashboard |
 | Infrastructure | Docker Compose |
 
 ---
