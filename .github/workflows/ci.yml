@@ -17,16 +17,17 @@ jobs:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: pyproject.toml
-      # CPU-only torch first: the default PyPI wheels drag ~8 GB of CUDA deps
-      # (sentence-transformers -> torch) that runners neither need nor fit.
-      # Retry loop: the pytorch CDN has intermittent SSL outages.
-      - name: Install torch (cpu)
+      # Room for the PyPI CUDA-torch fallback below (~25 GB freed).
+      - name: Free runner disk
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      # CPU-only torch preferred: the default PyPI wheels drag ~8 GB of CUDA deps
+      # (sentence-transformers -> torch) the runner doesn't need. The pytorch CDN
+      # has intermittent SSL outages from GitHub's edge — fall back to PyPI torch
+      # (fits thanks to the disk cleanup) so CI never blocks on their CDN.
+      - name: Install torch (cpu preferred, PyPI fallback)
         run: |
-          for i in 1 2 3 4; do
-            pip install torch --index-url https://download.pytorch.org/whl/cpu && exit 0
-            echo "pytorch CDN failed (attempt $i), retrying in 60s…"; sleep 60
-          done
-          exit 1
+          pip install torch --index-url https://download.pytorch.org/whl/cpu \
+            || pip install torch
       - name: Install project
         run: |
           pip install -e .
