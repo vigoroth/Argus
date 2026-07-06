@@ -1,12 +1,14 @@
 from dotenv import load_dotenv
 from langchain_core.messages import RemoveMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 
+import app.hooks.builtin  # noqa: F401 — importing registers the built-in hooks
 from app.agent.state import AgentState
 from app.agent.summarize import choose_cut, count_tokens, prunable, render_messages
 from app.core.llm import get_llm, invoke_tracked
 from app.core.logging_config import get_logger
+from app.hooks.registry import run_session_start
+from app.hooks.toolnode import make_hooked_tool_node
 from app.mcp.client import load_mcp_tools
 from app.tools.agent_tools import AGENT_TOOLS
 from app.tools.calendar_tools import CALENDAR_TOOLS
@@ -165,27 +167,10 @@ async def build_graph(checkpointer=None, model: str | None = None,
 
                     messages = [SystemMessage(content=SYSTEM_PROMPT)]
 
-                    # current time, injected fresh each turn so the model can resolve
-                    # relative dates ("friday 3pm") for the calendar tools. A tiny
-                    # context-injection "hook" — deterministic, not model-controlled.
-                    from datetime import datetime
-                    messages.append(SystemMessage(
-                        content="Current date/time: " + datetime.now().astimezone().isoformat()))
-
-                    # skills index, fresh each turn (progressive disclosure): a
-                    # just-approved skill appears without a graph rebuild
-                    from app.skills.loader import skill_index
-                    idx = skill_index()
-                    if idx:
-                        messages.append(SystemMessage(
-                            content="Available skills (load with load_skill):\n" + idx))
-
-                    # subagents the model can delegate to via spawn_agent
-                    from app.subagents.loader import agent_index
-                    aidx = agent_index()
-                    if aidx:
-                        messages.append(SystemMessage(
-                            content="Available subagents (delegate with spawn_agent):\n" + aidx))
+                    # session_start hooks: deterministic per-turn context injection
+                    # (datetime, skills index, subagent index, calendar reminders).
+                    # Runtime-pushed, never model-controlled — see app/hooks/builtin.py.
+                    messages += run_session_start(state)
 
                     # running summary of older, pruned turns (trusted — we generated it)
                     summary = state.get("summary")
@@ -226,9 +211,9 @@ async def build_graph(checkpointer=None, model: str | None = None,
         graph.add_edge("summarize", "llm")
 
         if all_tools:
-            # ToolNode handles running the actual tool functions and
-            # returning ToolMessage results back into state
-            graph.add_node("tools", ToolNode(all_tools))
+            # hook-aware tool executor: pre_tool_use can veto a call (the model
+            # sees the block reason as the tool result), post_tool_use logs all
+            graph.add_node("tools", make_hooked_tool_node(all_tools))
             graph.add_conditional_edges(
                 "llm",
                 should_continue,
