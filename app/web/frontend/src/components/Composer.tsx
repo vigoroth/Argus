@@ -9,7 +9,7 @@ export default function Composer({ models, disabled, onSend, onTerminal, termEna
   termEnabled: boolean
 }) {
   const [msg, setMsg] = useState('')
-  const [mode, setMode] = useState<'agent' | 'chat'>('agent')
+  const [mode, setMode] = useState<'agent' | 'chat' | 'research'>('agent')
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -23,7 +23,7 @@ export default function Composer({ models, disabled, onSend, onTerminal, termEna
     onSend(m, provider || null, model || null, mode)
   }
 
-  const pillBtn = (m: 'agent' | 'chat', label: string) => (
+  const pillBtn = (m: 'agent' | 'chat' | 'research', label: string) => (
     <button onClick={() => setMode(m)}
       style={{ padding: '6px 16px', border: 'none', borderRadius: 7, fontSize: 13.5,
                cursor: 'pointer', background: mode === m ? 'var(--pill-on)' : 'transparent',
@@ -93,6 +93,7 @@ export default function Composer({ models, disabled, onSend, onTerminal, termEna
                           border: '1px solid var(--pill-br)', borderRadius: 9, padding: 3, gap: 2 }}>
               {pillBtn('agent', 'Agent')}
               {pillBtn('chat', 'Chat')}
+              {pillBtn('research', 'Research')}
             </div>
             <button onClick={send} disabled={disabled}
               style={{ width: 40, height: 38, display: 'flex', alignItems: 'center',

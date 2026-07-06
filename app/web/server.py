@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import build_graph
+from app.agent.research import build_research_graph
 from app.core.config import configure_tracing, get_settings
 from app.core.logging_config import configure_logging, get_logger
 from app.core.metrics import (
@@ -130,17 +131,24 @@ _graph_lock = asyncio.Lock()  # concurrent builds race inside MCP tool loading
 
 
 async def get_graph(model: str | None = None, provider: str | None = None,
-                    plain: bool = False):
+                    mode: str = "agent"):
+    """Compiled graph for a (provider, model, mode) triple, cached. Modes:
+    'agent' (ReAct + tools), 'chat' (plain LLM), 'research' (deep-research orchestrator)."""
     global CHECKPOINTER
-    key = f"{provider or 'default'}:{model or 'default'}:{'plain' if plain else 'agent'}"
+    key = f"{provider or 'default'}:{model or 'default'}:{mode}"
     if key in GRAPHS:
         return GRAPHS[key]
     async with _graph_lock:
         if CHECKPOINTER is None:
             CHECKPOINTER = await _checkpointer_cm.__aenter__()
         if key not in GRAPHS:  # re-check under the lock
-            GRAPHS[key] = await build_graph(checkpointer=CHECKPOINTER, model=model,
-                                            provider=provider, plain=plain)
+            if mode == "research":
+                GRAPHS[key] = await build_research_graph(
+                    checkpointer=CHECKPOINTER, model=model, provider=provider)
+            else:
+                GRAPHS[key] = await build_graph(
+                    checkpointer=CHECKPOINTER, model=model, provider=provider,
+                    plain=(mode == "chat"))
     return GRAPHS[key]
 
 
@@ -149,6 +157,9 @@ init_metrics_table()
 init_activity_table()
 init_memory_table()
 init_secrets_table()
+from app.calendar.store import init_calendar_table
+
+init_calendar_table()
 apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
 
 
@@ -157,7 +168,7 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
     model: str | None = None
     provider: str | None = None
-    mode: str = "agent"  # "agent" (tools) | "chat" (plain LLM)
+    mode: str = "agent"  # "agent" (tools) | "chat" (plain LLM) | "research" (deep research)
 
 
 class SecretRequest(BaseModel):
@@ -239,6 +250,105 @@ def stats():
     return get_stats_summary()
 
 
+@app.get("/calendar.ics", dependencies=[Depends(require_auth)])
+def calendar_ics():
+    """Export the local calendar as iCalendar, so it can be subscribed to from any
+    calendar app (the agent manages events; this is the read-only feed)."""
+    from fastapi.responses import Response
+
+    from app.calendar.store import export_ics
+    return Response(export_ics(), media_type="text/calendar")
+
+
+@app.get("/calendar", dependencies=[Depends(require_auth)])
+def calendar_list():
+    """All calendar events (chronological) for the Calendar view."""
+    from app.calendar.store import list_events
+    return list_events(start="0001-01-01T00:00")
+
+
+class EventRequest(BaseModel):
+    title: str
+    start: str
+    end: str | None = None
+    location: str | None = None
+    notes: str | None = None
+
+
+@app.post("/calendar", dependencies=[Depends(require_auth)])
+def calendar_create(req: EventRequest):
+    """Create an event from the Calendar view (ISO 8601 datetimes)."""
+    from app.calendar.store import add_event
+    try:
+        eid = add_event(req.title, req.start, req.end, req.location, req.notes)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start/end must be ISO 8601") from None
+    return {"id": eid}
+
+
+@app.delete("/calendar/{event_id}", dependencies=[Depends(require_auth)])
+def calendar_delete(event_id: int):
+    """Delete one event by id from the Calendar view."""
+    from app.calendar.store import delete_event
+    return {"ok": delete_event(event_id)}
+
+
+# ── skills (Upgrade 004): live index + human approval queue for agent drafts ──
+
+@app.get("/skills", dependencies=[Depends(require_auth)])
+def skills_list():
+    """Live skills, pending skill drafts, subagents, and pending tool code —
+    everything the Skills tab reviews."""
+    from app.skills.loader import list_pending, list_skills
+    from app.skills.toolgate import list_pending_tools
+    from app.subagents.loader import list_agents
+    live = [{"name": s["name"], "description": s["description"]} for s in list_skills()]
+    pending = [{"name": s["name"], "description": s["description"], "body": s["body"]}
+               for s in list_pending()]
+    agents = [{"name": a["name"], "description": a["description"],
+               "tools": a["tools"]} for a in list_agents()]
+    return {"live": live, "pending": pending, "agents": agents,
+            "pending_tools": list_pending_tools()}
+
+
+@app.post("/skills/{name}/approve", dependencies=[Depends(require_auth)])
+def skills_approve(name: str):
+    """Promote a pending agent-drafted skill to live (the capability firewall)."""
+    from app.skills.loader import approve_skill
+    if not approve_skill(name):
+        raise HTTPException(status_code=404, detail="no such pending skill")
+    return {"ok": True}
+
+
+@app.post("/skills/{name}/reject", dependencies=[Depends(require_auth)])
+def skills_reject(name: str):
+    """Discard a pending agent-drafted skill."""
+    from app.skills.loader import reject_skill
+    if not reject_skill(name):
+        raise HTTPException(status_code=404, detail="no such pending skill")
+    return {"ok": True}
+
+
+@app.post("/tools/{name}/approve", dependencies=[Depends(require_auth)])
+def tools_approve(name: str):
+    """Promote a pending agent-written TOOL (code) to live after human review.
+    Clears the graph cache so the next request rebuilds with the new tool bound."""
+    from app.skills.toolgate import approve_tool
+    if not approve_tool(name):
+        raise HTTPException(status_code=404, detail="no such pending tool")
+    GRAPHS.clear()  # hot-load: next get_graph() re-runs build_graph -> load_custom_tools
+    return {"ok": True}
+
+
+@app.post("/tools/{name}/reject", dependencies=[Depends(require_auth)])
+def tools_reject(name: str):
+    """Discard a pending agent-written tool draft."""
+    from app.skills.toolgate import reject_tool
+    if not reject_tool(name):
+        raise HTTPException(status_code=404, detail="no such pending tool")
+    return {"ok": True}
+
+
 def _snippet(value, limit: int = 80) -> str:
     """Compact one-line preview of tool args or a tool result."""
     s = " ".join(str(value).split())
@@ -273,99 +383,129 @@ def _activity_and_usage(node_out: dict) -> tuple[list[dict], int, int]:
     return events, in_tokens, out_tokens
 
 
+async def _stream_run(graph, graph_input, conv_id: str, model_name: str, label: str):
+    """Shared SSE generator for a single graph run. Used by /chat (fresh turn) and
+    /chat/resume (continuing a paused research run — graph_input is a Command there).
+    Streams tokens + activity, emits a `plan` event if the graph pauses at an
+    interrupt, then persists the reply + metrics + vault note (only if a reply was
+    produced — the research planning phase intentionally yields no assistant text)."""
+    yield {"event": "conversation", "data": conv_id}
+    full_reply = ""
+    activity_log: list[dict] = []
+    t0 = time.perf_counter()
+    in_tokens = out_tokens = 0
+    run_error = None
+    config = {"configurable": {"thread_id": conv_id}}
+    try:
+        async for mode, chunk in graph.astream(
+            graph_input, stream_mode=["messages", "updates"], config=config,
+        ):
+            if mode == "messages":
+                msg, _meta = chunk
+                content = getattr(msg, "content", None)
+                if content and isinstance(content, str):
+                    full_reply += content
+                    yield {"data": json.dumps(content)}
+            elif mode == "updates":
+                # research plan-approval gate: the graph paused for the human
+                if "__interrupt__" in chunk:
+                    plan = chunk["__interrupt__"][0].value.get("plan", [])
+                    yield {"event": "plan", "data": json.dumps(plan)}
+                    continue
+                for node_out in chunk.values():
+                    events, dt_in, dt_out = _activity_and_usage(node_out)
+                    in_tokens += dt_in
+                    out_tokens += dt_out
+                    for ev in events:
+                        activity_log.append(ev)
+                        yield {"event": "activity", "data": json.dumps(ev)}
+    except Exception as e:
+        run_error = str(e)
+        err_ev = {"kind": "error", "text": f"error: {run_error[:120]}"}
+        activity_log.append(err_ev)
+        yield {"event": "activity", "data": json.dumps(err_ev)}
+    finally:
+        metrics_task = asyncio.create_task(asyncio.to_thread(
+            record_run,
+            label, (time.perf_counter() - t0) * 1000,
+            in_tokens, out_tokens,
+            cost_usd(model_name, in_tokens, out_tokens),
+            run_error is None, run_error,
+            conversation_id=conv_id, model=model_name,
+        ))
+        activity_task = asyncio.create_task(
+            asyncio.to_thread(record_activity, conv_id, activity_log))
+        # only persist an assistant message when there actually is a reply
+        save_task = (asyncio.create_task(
+            asyncio.to_thread(add_message, conv_id, "assistant", full_reply))
+            if full_reply else None)
+        try:
+            await metrics_task  # metrics must never break chat
+        except Exception as e:
+            log.warning("metrics write skipped: %s", e)
+        try:
+            await activity_task  # activity log must never break chat
+        except Exception as e:
+            log.warning("activity write skipped: %s", e)
+        if save_task:
+            await save_task
+    yield {"event": "done", "data": ""}
+    if not full_reply:
+        return  # paused at the plan gate — nothing to sync to the vault yet
+    try:
+        from app.web.conversations import list_conversations
+        from app.web.vault_writer import refresh_graph, write_conversation
+
+        def _vault_sync():
+            msgs = get_messages(conv_id)
+            title = next((c["title"] for c in list_conversations()
+                        if c["id"] == conv_id), conv_id)
+            write_conversation(conv_id, title, msgs)
+            refresh_graph()   # non-blocking Popen (debounced)
+        await asyncio.to_thread(_vault_sync)
+    except Exception as e:
+        log.warning("vault write skipped: %s", e)
+
+
 @app.post("/chat", dependencies=[Depends(require_auth)])
 async def chat(req: ChatRequest):
-    """Stream the agent's reply; persist both user and assistant messages."""
-    # blocking psycopg calls run in the threadpool so they never stall the event loop
+    """Stream the agent's reply; persist both user and assistant messages.
+    Research mode runs plan → pauses at the approval gate (emits a `plan` event);
+    the client approves via /chat/resume."""
     conv_id = req.conversation_id or await asyncio.to_thread(create_conversation, req.message)
     await asyncio.to_thread(add_message, conv_id, "user", req.message)
+    model_name = req.model or get_settings().llm_model
+    graph = await get_graph(req.model, req.provider, mode=req.mode)
+    graph_input = ({"question": req.message} if req.mode == "research"
+                   else {"messages": [HumanMessage(content=req.message)]})
+    return EventSourceResponse(
+        _stream_run(graph, graph_input, conv_id, model_name, req.mode))
 
-    async def event_generator():
-            yield {"event": "conversation", "data": conv_id}
-            full_reply = ""
-            activity_log: list[dict] = []  # this turn's tool calls/results, persisted below
-            # per-run metrics (latency, tokens, cost) → run_metrics table
-            t0 = time.perf_counter()
-            in_tokens = out_tokens = 0
-            run_error = None
-            model_name = req.model or get_settings().llm_model
-            try:
-                graph = await get_graph(req.model, req.provider, plain=(req.mode == "chat"))
-                config = {"configurable": {"thread_id": conv_id}}
-                async for mode, chunk in graph.astream(
-                    {"messages": [HumanMessage(content=req.message)]},
-                    stream_mode=["messages", "updates"],
-                    config=config,
-                ):
-                    if mode == "messages":
-                        # token streaming (chunk is a (message, meta) tuple)
-                        msg, _meta = chunk
-                        content = getattr(msg, "content", None)
-                        if content and isinstance(content, str):
-                            full_reply += content
-                            yield {"data": json.dumps(content)}
-                    elif mode == "updates":
-                        # node-level updates — surface tool activity + tally usage
-                        for node_out in chunk.values():
-                            events, dt_in, dt_out = _activity_and_usage(node_out)
-                            in_tokens += dt_in
-                            out_tokens += dt_out
-                            for ev in events:
-                                activity_log.append(ev)
-                                yield {"event": "activity", "data": json.dumps(ev)}
-            except Exception as e:
-                run_error = str(e)
-                err_ev = {"kind": "error", "text": f"error: {run_error[:120]}"}
-                activity_log.append(err_ev)
-                yield {"event": "activity", "data": json.dumps(err_ev)}
-            finally:
-                # metrics + persisting the reply are independent writes — run them
-                # concurrently instead of back-to-back thread hops
-                metrics_task = asyncio.create_task(asyncio.to_thread(
-                    record_run,
-                    "chat", (time.perf_counter() - t0) * 1000,
-                    in_tokens, out_tokens,
-                    cost_usd(model_name, in_tokens, out_tokens),
-                    run_error is None, run_error,
-                    conversation_id=conv_id, model=model_name,
-                ))
-                save_task = asyncio.create_task(
-                    asyncio.to_thread(add_message, conv_id, "assistant", full_reply))
-                activity_task = asyncio.create_task(
-                    asyncio.to_thread(record_activity, conv_id, activity_log))
-                try:
-                    await metrics_task  # metrics must never break chat
-                except Exception as e:
-                    log.warning("metrics write skipped: %s", e)
-                try:
-                    await activity_task  # activity log must never break chat
-                except Exception as e:
-                    log.warning("activity write skipped: %s", e)
-                await save_task
-            # let the client render the reply now; persistence below is housekeeping
-            yield {"event": "done", "data": ""}
-            # also write the whole conversation to the Obsidian vault
-            try:
-                from app.web.conversations import list_conversations
-                from app.web.vault_writer import refresh_graph, write_conversation
 
-                def _vault_sync():
-                    msgs = get_messages(conv_id)
-                    title = next((c["title"] for c in list_conversations()
-                                if c["id"] == conv_id), conv_id)
-                    write_conversation(conv_id, title, msgs)
-                    refresh_graph()   # non-blocking Popen (debounced)
-                await asyncio.to_thread(_vault_sync)
-            except Exception as e:
-                log.warning("vault write skipped: %s", e)
+class ResumeRequest(BaseModel):
+    conversation_id: str
+    plan: list[str]
+    model: str | None = None
+    provider: str | None = None
 
-    return EventSourceResponse(event_generator())
+
+@app.post("/chat/resume", dependencies=[Depends(require_auth)])
+async def chat_resume(req: ResumeRequest):
+    """Resume a paused deep-research run with the (possibly edited) approved plan.
+    Runs the parallel researchers + synthesis and streams the cited report."""
+    from langgraph.types import Command
+    model_name = req.model or get_settings().llm_model
+    graph = await get_graph(req.model, req.provider, mode="research")
+    return EventSourceResponse(
+        _stream_run(graph, Command(resume=req.plan),
+                    req.conversation_id, model_name, "research"))
 
 
 # real local terminal (PTY over WS, auth-gated) — see app/web/term.py
-from app.web.term import terminal_ws
+from app.web.term import claude_ws, terminal_ws
 
 app.add_api_websocket_route("/term", terminal_ws)
+app.add_api_websocket_route("/claude", claude_ws)  # Claude Code session in the repo
 
 # hashed asset bundles from the React build (index.html stays auth-gated above)
 if FRONTEND_DIST.exists():

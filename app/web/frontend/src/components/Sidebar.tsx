@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react'
 import type { Conversation } from '../api'
 import { relTime } from '../api'
-import { Plus, Search, ChatBubble, Globe, Bars, Term, Key, Menu, ChevronDown, ChevronRight } from './Icons'
+import { Plus, Search, ChatBubble, Globe, Bars, Term, Bot, Key, Calendar, Zap, Menu, ChevronDown, ChevronRight } from './Icons'
 
-export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'settings'
+export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'claude' | 'settings' | 'calendar' | 'skills'
 
 const row: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 13, padding: '9px 11px',
@@ -96,6 +96,10 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
                                  background: graphStatus === 'building' ? '#f4bf4f' : 'var(--green)',
                                  boxShadow: `0 0 6px ${graphStatus === 'building' ? '#f4bf4f88' : '#5fb84f88'}` }}/>
                 </span>}/>
+        <NavRow color="var(--blue)" icon={<Calendar/>} label="Calendar" active={view === 'calendar'}
+                onClick={() => onView('calendar')}/>
+        <NavRow color="var(--blue)" icon={<Zap/>} label="Skills" active={view === 'skills'}
+                onClick={() => onView('skills')}/>
         <NavRow color="var(--blue)" icon={<Bars/>} label="Stats" active={view === 'stats'}
                 onClick={() => onView('stats')}/>
         <NavRow color="var(--blue)" icon={<Key/>} label="API Keys" active={view === 'settings'}
@@ -103,6 +107,10 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
         {termEnabled && (
           <NavRow color="var(--blue)" icon={<Term/>} label="Terminal" active={view === 'terminal'}
                   onClick={() => onView('terminal')}/>
+        )}
+        {termEnabled && (
+          <NavRow color="var(--violet)" icon={<Bot/>} label="Claude Code" active={view === 'claude'}
+                  onClick={() => onView('claude')}/>
         )}
       </nav>
     </aside>

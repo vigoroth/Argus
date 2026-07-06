@@ -15,3 +15,12 @@ app/web/frontend/dist/
 *:Zone.Identifier
 Screenshot*.png
 CLAUDE.md
+
+# private educational upgrade lab (theory, notebooks, brainstorming) — never uploaded
+lab/
+
+# agent-drafted skills awaiting approval (transient)
+skills/_pending/
+
+# agent-drafted tool code awaiting review (transient)
+app/tools/custom/_pending/
