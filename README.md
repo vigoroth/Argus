@@ -11,7 +11,7 @@ Tool-using LangGraph agent · advanced RAG · persistent + graph memory · MCP �
 
 <p>
   <img src="https://img.shields.io/badge/License-MIT-7C5CF0?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/badge/Version-1.3-7C5CF0?style=for-the-badge" alt="Version 1.3" />
+  <img src="https://img.shields.io/badge/Version-1.4-7C5CF0?style=for-the-badge" alt="Version 1.4" />
   <img src="https://img.shields.io/badge/Tests-40%20passing-7C5CF0?style=for-the-badge" alt="Tests 40 passing" />
   <img src="https://img.shields.io/badge/Local--first-100%25-7C5CF0?style=for-the-badge" alt="Local-first" />
 </p>
@@ -262,6 +262,9 @@ npm run build        # → dist/, served by FastAPI at /
 # dev mode with hot reload (proxies API to :8000):
 npm run dev
 ```
+> **Non-Docker runs must build the frontend first.** `dist/` is a git-ignored
+> build artifact — if it's absent, the server falls back to the legacy single-file
+> UI. The Docker image builds it automatically.
 
 ### Run
 ```bash
@@ -272,6 +275,15 @@ python -m app.web.server           # launch chat UI at http://127.0.0.1:8000 (lo
 The server binds **127.0.0.1** by default because the built-in Terminal is a real
 shell on the host (login-gated). Set `ARGUS_BIND=0.0.0.0` to expose on the LAN —
 only with strong credentials.
+
+**Security / trust model.** Two paths grant host command execution, gated by the
+single-password login **and** the localhost-only bind:
+- **Terminal tab** (`/term`) — an intentionally unrestricted PTY (`bash -l`) for
+  *you*. Disabled entirely on a non-local bind unless `ARGUS_TERM_ALLOW_REMOTE=1`.
+- **`run_shell` agent tool** — LLM-driven, so it carries a destructive-command
+  **guardrail** (refuses `rm -rf`, `mkfs`, `dd` to a device, `shutdown`, fork
+  bombs, …) and a 30s timeout. This is defense-in-depth, **not a sandbox** — treat
+  the login password as the real boundary and don't expose the app untrusted.
 
 ---
 

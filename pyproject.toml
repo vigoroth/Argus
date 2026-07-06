@@ -1,6 +1,6 @@
 [project]
 name = "argus"
-version = "1.3.0"
+version = "1.4.0"
 description = "Self-hosted, local-first agent workspace: LangGraph agent, RAG, Postgres memory, MCP, web UI."
 requires-python = ">=3.11"
 dependencies = [

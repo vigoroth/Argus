@@ -22,6 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agent.graph import build_graph
 from app.core.config import configure_tracing, get_settings
+from app.core.logging_config import configure_logging, get_logger
 from app.core.metrics import (
     get_activity,
     get_stats_summary,
@@ -31,6 +32,7 @@ from app.core.metrics import (
     record_run,
 )
 from app.core.pricing import cost_usd
+from app.memory.long_term import init_memory_table
 from app.web.auth import (
     COOKIE_NAME,
     MAX_AGE,
@@ -55,6 +57,8 @@ from app.web.secrets_store import (
     set_secret,
 )
 
+configure_logging()
+log = get_logger("argus.web.server")
 configure_tracing()  # export LangSmith env vars if tracing is enabled in .env
 app = FastAPI(title="Argus")
 
@@ -118,6 +122,7 @@ async def models():
 
 
 # persistent async checkpointer for per-conversation memory (built lazily)
+Path("data").mkdir(exist_ok=True)  # sqlite checkpointer dir (gitignored, absent on fresh clones)
 _checkpointer_cm = AsyncSqliteSaver.from_conn_string("data/web_memory.sqlite")
 CHECKPOINTER = None
 GRAPHS = {}  # model_name -> compiled graph
@@ -142,6 +147,7 @@ async def get_graph(model: str | None = None, provider: str | None = None,
 init_tables()
 init_metrics_table()
 init_activity_table()
+init_memory_table()
 init_secrets_table()
 apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
 
@@ -244,6 +250,9 @@ def _activity_and_usage(node_out: dict) -> tuple[list[dict], int, int]:
     entries ({'kind','text'} — tool calls / results) and tally token usage."""
     events: list[dict] = []
     in_tokens = out_tokens = 0
+    # a no-op node (e.g. summarize below its trigger) streams a None/empty update
+    if not node_out:
+        return events, in_tokens, out_tokens
     for msg in node_out.get("messages", []):
         tool_calls = getattr(msg, "tool_calls", None)
         if tool_calls:
@@ -327,11 +336,11 @@ async def chat(req: ChatRequest):
                 try:
                     await metrics_task  # metrics must never break chat
                 except Exception as e:
-                    print(f"metrics write skipped: {e}")
+                    log.warning("metrics write skipped: %s", e)
                 try:
                     await activity_task  # activity log must never break chat
                 except Exception as e:
-                    print(f"activity write skipped: {e}")
+                    log.warning("activity write skipped: %s", e)
                 await save_task
             # let the client render the reply now; persistence below is housekeeping
             yield {"event": "done", "data": ""}
@@ -348,7 +357,7 @@ async def chat(req: ChatRequest):
                     refresh_graph()   # non-blocking Popen (debounced)
                 await asyncio.to_thread(_vault_sync)
             except Exception as e:
-                print(f"vault write skipped: {e}")
+                log.warning("vault write skipped: %s", e)
 
     return EventSourceResponse(event_generator())
 
@@ -364,13 +373,98 @@ if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
 
 
+def _port_holder(host: str, port: int) -> int | None:
+    """PID of the process LISTENing on host:port, or None if the port is free.
+
+    Stdlib-only (no psutil): parse `ss`, fall back to `lsof`. Returns the first
+    matching listener; None when nothing holds the port or neither tool exists.
+    """
+    import re
+    import shutil
+    import subprocess
+
+    if shutil.which("ss"):
+        out = subprocess.run(["ss", "-ltnp"], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            local = line.split()[3:4]  # Local Address:Port column
+            if not local or not local[0].endswith(f":{port}"):
+                continue
+            m = re.search(r"pid=(\d+)", line)
+            if m:
+                return int(m.group(1))
+    if shutil.which("lsof"):
+        out = subprocess.run(
+            ["lsof", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        if out:
+            return int(out.splitlines()[0])
+    return None
+
+
+def _cmdline(pid: int) -> str:
+    """Best-effort process command line for a PID (empty string if unreadable)."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return f.read().replace(b"\x00", b" ").decode(errors="replace").strip()
+    except OSError:
+        import subprocess
+        return subprocess.run(
+            ["ps", "-o", "cmd=", "-p", str(pid)], capture_output=True, text=True,
+        ).stdout.strip()
+
+
+def _free_port(host: str, port: int) -> None:
+    """Ensure host:port is bindable before uvicorn starts.
+
+    If a *stale instance of this same server* holds it, terminate that process
+    and wait for the socket to free. If a foreign process holds it, exit cleanly
+    with guidance instead of letting uvicorn raise a raw EADDRINUSE traceback.
+    """
+    import os
+    import signal
+    import time
+
+    pid = _port_holder(host, port)
+    if pid is None or pid == os.getpid():
+        return
+
+    cmd = _cmdline(pid)
+    if "app.web.server" not in cmd:
+        log.error("port %s is held by PID %s (%s).", port, pid, cmd or "unknown process")
+        log.error("stop it, or start on another port:  ARGUS_PORT=<n> python -m app.web.server")
+        raise SystemExit(1)
+
+    log.info("port %s held by stale PID %s (our server) — terminating…", port, pid)
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return  # already gone between check and kill
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        time.sleep(0.25)
+        if _port_holder(host, port) is None:
+            log.info("stale PID %s stopped — port %s free.", pid, port)
+            return
+    # SIGTERM ignored within the grace window — force it
+    log.warning("stale PID %s ignored SIGTERM — sending SIGKILL.", pid)
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    time.sleep(0.5)
+
+
 def main() -> None:
     import os
 
     import uvicorn
     # default localhost-only: the /term endpoint is a real shell behind the login
     host = os.environ.get("ARGUS_BIND") or os.environ.get("NEXUS_BIND", "127.0.0.1")
-    uvicorn.run(app, host=host, port=8000)
+    port = int(os.environ.get("ARGUS_PORT", "8000"))
+    _free_port(host, port)
+    uvicorn.run(app, host=host, port=port)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,9 @@ from datetime import datetime
 from pathlib import Path
 
 from app.core.config import get_settings
+from app.core.logging_config import get_logger
+
+log = get_logger("argus.web.vault_writer")
 
 VAULT_PATH = Path(get_settings().argus_vault_path)
 CONV_DIR = VAULT_PATH / "Conversations"
@@ -41,7 +44,7 @@ def write_conversation(conv_id: str, title: str, messages: list[dict]) -> None:
             lines.append("")
         path.write_text("\n".join(lines), encoding="utf-8")
     except Exception as e:
-        print(f"vault write failed: {e}")  # don't break chat if vault write fails
+        log.warning("vault write failed: %s", e)  # don't break chat if vault write fails
 
 
 def refresh_graph(vault_path: Path = VAULT_PATH) -> None:
@@ -55,7 +58,7 @@ def refresh_graph(vault_path: Path = VAULT_PATH) -> None:
     global _extract_proc, _last_extract_ts
     graphify = shutil.which("graphify")
     if not graphify:
-        print("graph refresh skipped: graphify not on PATH")
+        log.info("graph refresh skipped: graphify not on PATH")
         return
     if _extract_proc is not None and _extract_proc.poll() is None:
         return  # previous extract still running
@@ -80,7 +83,7 @@ def refresh_graph(vault_path: Path = VAULT_PATH) -> None:
         )
         _last_extract_ts = time.monotonic()
     except Exception as e:
-        print(f"graph refresh skipped: {e}")  # never break chat on graph refresh
+        log.warning("graph refresh skipped: %s", e)  # never break chat on graph refresh
 
 
 def graph_build_status() -> str:

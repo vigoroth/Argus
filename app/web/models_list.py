@@ -4,6 +4,10 @@ import re
 
 import httpx
 
+from app.core.logging_config import get_logger
+
+log = get_logger("argus.web.models_list")
+
 
 async def list_openai_models() -> list[str]:
     """Query OpenAI for chat-capable models, collapsing dated snapshots."""
@@ -29,7 +33,7 @@ async def list_openai_models() -> list[str]:
         ]
         return sorted(set(models))
     except Exception as e:
-        print(f"OpenAI model list failed: {e}")
+        log.warning("OpenAI model list failed: %s", e)
         return []
 
 async def list_ollama_models() -> list[str]:
@@ -59,7 +63,7 @@ async def list_anthropic_models() -> list[str]:
             data = r.json().get("data", [])
         return sorted(m["id"] for m in data)
     except Exception as e:
-        print(f"Anthropic model list failed: {e}")
+        log.warning("Anthropic model list failed: %s", e)
         return []
 
 
@@ -85,7 +89,7 @@ async def list_gemini_models() -> list[str]:
         ]
         return sorted(set(models))
     except Exception as e:
-        print(f"Gemini model list failed: {e}")
+        log.warning("Gemini model list failed: %s", e)
         return []
 
 

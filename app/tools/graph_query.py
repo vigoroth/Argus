@@ -14,6 +14,9 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 from app.core.config import get_settings
+from app.core.logging_config import get_logger
+
+log = get_logger("argus.tools.graph_query")
 
 VAULT_PATH = Path(get_settings().argus_vault_path)
 GRAPH_JSON = VAULT_PATH / "graphify-out" / "graph.json"
@@ -37,7 +40,7 @@ def get_graph_data() -> dict:
     try:
         raw = json.loads(GRAPH_JSON.read_text(encoding="utf-8"))
     except Exception as e:
-        print(f"graph read failed: {e}")
+        log.warning("graph read failed: %s", e)
         return {"nodes": [], "links": []}
     nodes, links = raw.get("nodes", []), raw.get("links", [])
 

@@ -6,14 +6,17 @@ from langgraph.prebuilt import ToolNode
 from app.agent.state import AgentState
 from app.agent.summarize import choose_cut, count_tokens, prunable, render_messages
 from app.core.llm import get_llm, invoke_tracked
+from app.core.logging_config import get_logger
 from app.mcp.client import load_mcp_tools
 from app.tools.graph_query import graph_query
 from app.tools.memory_tools import load_memory, save_memory
-from app.tools.os_tools import run_shell
+from app.tools.os_tools import list_dir, read_file, run_shell
 from app.tools.rag_tool import search_documents
 from app.tools.web_search import web_search
 
 load_dotenv()
+
+log = get_logger("argus.agent.graph")
 
 
 SYSTEM_PROMPT = """You are a helpful personal AI assistant named Argus with access to tools.
@@ -26,21 +29,16 @@ Tool selection rules:
   user explicitly names.
 - To recall earlier conversations, topics discussed before, or how the user's
   past context connects, use graph_query (the knowledge graph over past chats).
-
-- To read the full contents of a specific web page or URL, use the fetch tool
-  (it retrieves and extracts page content as markdown).
-  Use web_search to find pages by topic; use fetch to read a URL you already have.
+- Use web_search to find pages by topic. To read the full contents of a specific
+  URL or web page you already have, use the fetch tool (retrieves and extracts
+  page content as markdown). For current events, recent news, prices, or facts
+  that may have changed, use web_search; for the user's own documents use
+  search_documents.
 
 Think step by step. Be concise. When you answer from search_documents results,
 cite the source numbers like [1], [2].
 
--To retrieve the full contents of a specific URL or web page, use the fetch tool.
-    Use web_search to find pages; use fetch to read a known URL.
-
--For current events, recent news, prices, or facts that may have changed,
- use web_search. For the user's own documents use search_documents.
-
--MEMORY — THIS IS A STANDING INSTRUCTION, NOT OPTIONAL:
+MEMORY — THIS IS A STANDING INSTRUCTION, NOT OPTIONAL:
 The MOMENT the user states any personal fact about themselves — name, location,
 job, a pet, a preference, a project, a relationship, a goal, a date, anything
 they'd expect you to recall later — you MUST call save_memory immediately,
@@ -91,7 +89,7 @@ def summarize_node(state: AgentState) -> dict:
     try:
         result = invoke_tracked(prompt, system=SUMMARY_SYSTEM)
     except Exception as e:  # summarization must never break the chat turn
-        print(f"summarization skipped: {e}")
+        log.warning("summarization skipped: %s", e)
         return {}
     removals = [RemoveMessage(id=m.id) for m in to_prune]
     return {"summary": result.text, "messages": removals}
@@ -117,7 +115,8 @@ async def build_graph(checkpointer=None, model: str | None = None,
             other_mcp = mcp_tools
 
             # base tools (always present)
-            base = [search_documents, web_search, run_shell, graph_query] + other_mcp
+            base = [search_documents, web_search, read_file, list_dir, run_shell,
+                    graph_query] + other_mcp
 
             # Postgres long-term memory tools (kept toggleable for backend experiments)
             if memory_backend == "graph":
