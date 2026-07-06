@@ -1,6 +1,6 @@
 [project]
 name = "argus"
-version = "1.4.0"
+version = "1.8.0"
 description = "Self-hosted, local-first agent workspace: LangGraph agent, RAG, Postgres memory, MCP, web UI."
 requires-python = ">=3.11"
 dependencies = [
@@ -22,6 +22,7 @@ dependencies = [
     "sentence-transformers>=3.0",
     "pypdf>=6.0",
     "ddgs>=0.9",
+    "tavily-python>=0.5",   # research-grade web search (optional; needs TAVILY_API_KEY)
     # MCP
     "langchain-mcp-adapters>=0.1",
     # web server
@@ -32,6 +33,9 @@ dependencies = [
     "bcrypt>=4.0",
     "itsdangerous>=2.0",
     "httpx>=0.27",
+    # data analysis (data-analyst subagent)
+    "pandas>=2.2",
+    "openpyxl>=3.1",
     # config / utils
     "pydantic>=2.9",
     "pydantic-settings>=2.5",

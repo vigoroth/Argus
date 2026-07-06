@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
-export default function TerminalView() {
+export default function TerminalView({ path = '/term' }: { path?: string }) {
   const mountRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export default function TerminalView() {
     fit.fit()
 
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    const ws = new WebSocket(`${proto}://${window.location.host}/term`)
+    const ws = new WebSocket(`${proto}://${window.location.host}${path}`)
     ws.binaryType = 'arraybuffer'
 
     ws.onopen = () => {
@@ -57,7 +57,7 @@ export default function TerminalView() {
       ws.close()
       term.dispose()
     }
-  }, [])
+  }, [path])
 
   return (
     <div style={{ flex: 1, minHeight: 0, padding: '10px 14px 14px', background: '#0b0d10' }}>

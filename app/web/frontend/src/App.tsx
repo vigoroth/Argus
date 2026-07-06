@@ -3,13 +3,18 @@ import Sidebar, { type View } from './components/Sidebar'
 import ChatView from './components/ChatView'
 import Composer from './components/Composer'
 import StatsView from './components/StatsView'
+import PlanApproval from './components/PlanApproval'
 
 // heavy views load on demand (three.js / xterm stay out of the initial bundle)
 const GraphView = lazy(() => import('./components/GraphView'))
 const TerminalView = lazy(() => import('./components/TerminalView'))
+const ClaudeCodeView = lazy(() => import('./components/ClaudeCodeView'))
 const KeysView = lazy(() => import('./components/KeysView'))
-import type { ActivityEntry, Conversation, Message, ModelsByProvider } from './api'
-import { getActivity, getConversations, getMessages, getModels, getStatus, streamChat } from './api'
+const CalendarView = lazy(() => import('./components/CalendarView'))
+const SkillsView = lazy(() => import('./components/SkillsView'))
+const DataView = lazy(() => import('./components/DataView'))
+import type { ActivityEntry, Conversation, Message, ModelsByProvider, StreamHandlers } from './api'
+import { getActivity, getConversations, getMessages, getModels, getStatus, resumeResearch, streamChat } from './api'
 import { ChevronDown } from './components/Icons'
 
 export default function App() {
@@ -24,6 +29,8 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [graphStatus, setGraphStatus] = useState('idle')
   const [termEnabled, setTermEnabled] = useState(false)
+  const [plan, setPlan] = useState<string[] | null>(null)   // research: awaiting approval
+  const researchCtx = useRef<{ model: string | null; provider: string | null }>({ model: null, provider: null })
 
   // rAF token batching: buffer stream tokens, flush once per frame
   const pendingRef = useRef('')
@@ -69,35 +76,58 @@ export default function App() {
 
   const toggleCollapsed = useCallback(() => setCollapsed(c => !c), [])
 
-  const send = async (msg: string, provider: string | null, model: string | null, mode: string) => {
-    setBusy(true)
-    setMessages(ms => [...ms, { role: 'user', content: msg }])
+  // shared streaming consumer: drives token batching + finalize for both a fresh
+  // /chat turn and a /chat/resume research continuation.
+  const consumeStream = async (start: (h: StreamHandlers) => Promise<unknown>) => {
     setStreaming('')
-    const isNew = !convId
     let acc = ''  // authoritative copy of the reply
     try {
-      await streamChat(
-        { message: msg, conversation_id: convId, model, provider, mode },
-        {
-          onConversation: id => setConvId(id),
-          onToken: t => {
-            acc += t
-            pendingRef.current += t
-            if (!rafRef.current) rafRef.current = requestAnimationFrame(flush)
-          },
-          onActivity: a => setActivity(l => [...l, a]),
-          onDone: () => {},   // keep the turn's log; it persists per-conversation
-          onError: e => setActivity(l => [...l, { kind: 'error', text: 'error: ' + e }]),
+      await start({
+        onConversation: id => setConvId(id),
+        onToken: t => {
+          acc += t
+          pendingRef.current += t
+          if (!rafRef.current) rafRef.current = requestAnimationFrame(flush)
         },
-      )
+        onActivity: a => setActivity(l => [...l, a]),
+        onPlan: p => setPlan(p),   // research: surface the plan for approval
+        onDone: () => {},          // keep the turn's log; it persists per-conversation
+        onError: e => setActivity(l => [...l, { kind: 'error', text: 'error: ' + e }]),
+      })
     } catch { /* onError already surfaced it */ }
-    // finalize: move the streamed text into the message list
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = 0 }
     pendingRef.current = ''
     setStreaming('')
     if (acc) setMessages(ms => [...ms, { role: 'assistant', content: acc }])
+  }
+
+  const send = async (msg: string, provider: string | null, model: string | null, mode: string) => {
+    setBusy(true)
+    setPlan(null)
+    setMessages(ms => [...ms, { role: 'user', content: msg }])
+    researchCtx.current = { model, provider }   // remembered for a research resume
+    const isNew = !convId
+    await consumeStream(h => streamChat({ message: msg, conversation_id: convId, model, provider, mode }, h))
     setBusy(false)
     if (isNew) getConversations().then(setConvs).catch(console.error)
+  }
+
+  // Data tab "Analyze": jump to chat and hand the file to the data-analyst
+  const analyzeFile = (path: string) => {
+    setView('chat')
+    void send(
+      `Use the data-analyst subagent to analyze ${path}: profile the data, ` +
+      'clean if needed, and report the key findings with numbers.',
+      null, null, 'agent')
+  }
+
+  const approvePlan = async (edited: string[]) => {
+    if (!convId) return
+    setBusy(true)
+    setPlan(null)
+    const { model, provider } = researchCtx.current
+    await consumeStream(h => resumeResearch({ conversation_id: convId, plan: edited, model, provider }, h))
+    setBusy(false)
   }
 
   const title = convId ? (convs.find(c => c.id === convId)?.title ?? 'Chat') : 'New Chat'
@@ -139,15 +169,20 @@ export default function App() {
                 </div>
               </div>
               <ChatView messages={messages} streaming={streaming} activity={activity}/>
+              {plan && <PlanApproval plan={plan} disabled={busy} onApprove={approvePlan}/>}
               <Composer models={models} disabled={busy} onSend={send} termEnabled={termEnabled}
                         onTerminal={() => setView('terminal')}/>
             </>
           )}
           <Suspense fallback={<div style={{ padding: 40, color: 'var(--muted)' }}>loading ...</div>}>
             {view === 'graph' && <GraphView/>}
+            {view === 'calendar' && <CalendarView/>}
+            {view === 'skills' && <SkillsView/>}
+            {view === 'data' && <DataView onAnalyze={analyzeFile}/>}
             {view === 'stats' && <StatsView/>}
             {view === 'settings' && <KeysView/>}
             {view === 'terminal' && termEnabled && <TerminalView/>}
+            {view === 'claude' && termEnabled && <ClaudeCodeView/>}
           </Suspense>
         </main>
       </div>

@@ -14,5 +14,10 @@ export const Term = (p: P) => <I {...p}><polyline points="4 17 10 11 4 5"/><line
 export const Menu = (p: P) => <I {...p}><path d="M3 6h18M3 12h18M3 18h18"/></I>
 export const ChevronDown = (p: P) => <I {...p}><polyline points="6 9 12 15 18 9"/></I>
 export const ChevronRight = (p: P) => <I {...p}><polyline points="9 18 15 12 9 6"/></I>
+export const ChevronLeft = (p: P) => <I {...p}><polyline points="15 18 9 12 15 6"/></I>
 export const ArrowUp = (p: P) => <I {...p}><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></I>
 export const Key = (p: P) => <I {...p}><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="M18 5l2 2"/><path d="M15 8l2 2"/></I>
+export const Calendar = (p: P) => <I {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></I>
+export const Bot = (p: P) => <I {...p}><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 8V4"/><circle cx="12" cy="3" r="1"/><line x1="9" y1="13" x2="9" y2="15"/><line x1="15" y1="13" x2="15" y2="15"/></I>
+export const Zap = (p: P) => <I {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></I>
+export const Database = (p: P) => <I {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></I>

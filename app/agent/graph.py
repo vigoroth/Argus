@@ -1,17 +1,24 @@
 from dotenv import load_dotenv
 from langchain_core.messages import RemoveMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.prebuilt import ToolNode
 
+import app.hooks.builtin  # noqa: F401 — importing registers the built-in hooks
 from app.agent.state import AgentState
 from app.agent.summarize import choose_cut, count_tokens, prunable, render_messages
 from app.core.llm import get_llm, invoke_tracked
 from app.core.logging_config import get_logger
+from app.hooks.registry import run_session_start
+from app.hooks.toolnode import make_hooked_tool_node
 from app.mcp.client import load_mcp_tools
+from app.tools.agent_tools import AGENT_TOOLS
+from app.tools.calendar_tools import CALENDAR_TOOLS
 from app.tools.graph_query import graph_query
+from app.tools.idea_tools import IDEA_TOOLS
 from app.tools.memory_tools import load_memory, save_memory
+from app.tools.metrics_tools import METRICS_TOOLS
 from app.tools.os_tools import list_dir, read_file, run_shell
 from app.tools.rag_tool import search_documents
+from app.tools.skill_tools import SKILL_TOOLS
 from app.tools.web_search import web_search
 
 load_dotenv()
@@ -34,6 +41,21 @@ Tool selection rules:
   page content as markdown). For current events, recent news, prices, or facts
   that may have changed, use web_search; for the user's own documents use
   search_documents.
+- To schedule, view, find, or cancel the user's events, use the calendar tools
+  (add_event / list_events / find_events / delete_event). Pass datetimes as ISO
+  8601 (e.g. 2026-07-10T15:00); resolve relative dates like "friday" against the
+  current date/time given below. Before delete_event, confirm which event with the
+  user (look up its id first).
+- SKILLS: your context lists available skills (one line each). Before improvising a
+  multi-step workflow, check that list — if a skill matches the task, call
+  load_skill(name) and follow its instructions. If the task needs a reusable
+  workflow no skill covers, draft one with create_skill (it goes to a human
+  approval queue; tell the user to approve it in the Skills tab).
+- SUBAGENTS: for substantial delegable work (data analysis, long research legs),
+  check the subagents list and use spawn_agent(name, task) with ONE self-contained
+  task. If a task needs an executable capability no tool provides, draft it with
+  create_tool (Python module defining TOOLS = [...]); it requires human code review
+  in the Skills tab before it can run.
 
 Think step by step. Be concise. When you answer from search_documents results,
 cite the source numbers like [1], [2].
@@ -115,8 +137,14 @@ async def build_graph(checkpointer=None, model: str | None = None,
             other_mcp = mcp_tools
 
             # base tools (always present)
+            # approved agent-written tools (app/tools/custom/) hot-load here;
+            # the server clears the graph cache on approval so this re-runs
+            from app.skills.toolgate import load_custom_tools
+            custom = load_custom_tools()
+
             base = [search_documents, web_search, read_file, list_dir, run_shell,
-                    graph_query] + other_mcp
+                    graph_query] + CALENDAR_TOOLS + SKILL_TOOLS + IDEA_TOOLS \
+                + METRICS_TOOLS + AGENT_TOOLS + custom + other_mcp
 
             # Postgres long-term memory tools (kept toggleable for backend experiments)
             if memory_backend == "graph":
@@ -138,6 +166,11 @@ async def build_graph(checkpointer=None, model: str | None = None,
                     facts = {} if memory_backend == "graph" else recall_all()
 
                     messages = [SystemMessage(content=SYSTEM_PROMPT)]
+
+                    # session_start hooks: deterministic per-turn context injection
+                    # (datetime, skills index, subagent index, calendar reminders).
+                    # Runtime-pushed, never model-controlled — see app/hooks/builtin.py.
+                    messages += run_session_start(state)
 
                     # running summary of older, pruned turns (trusted — we generated it)
                     summary = state.get("summary")
@@ -178,9 +211,9 @@ async def build_graph(checkpointer=None, model: str | None = None,
         graph.add_edge("summarize", "llm")
 
         if all_tools:
-            # ToolNode handles running the actual tool functions and
-            # returning ToolMessage results back into state
-            graph.add_node("tools", ToolNode(all_tools))
+            # hook-aware tool executor: pre_tool_use can veto a call (the model
+            # sees the block reason as the tool result), post_tool_use logs all
+            graph.add_node("tools", make_hooked_tool_node(all_tools))
             graph.add_conditional_edges(
                 "llm",
                 should_continue,
