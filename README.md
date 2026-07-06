@@ -7,12 +7,13 @@
 <strong><em>Yours for the voyage.</em></strong> ⛵
 
 <p>A self-hosted, local-first AI agent workspace — built from scratch.<br/>
-Tool-using LangGraph agent · advanced RAG · persistent + graph memory · MCP · multi-provider LLMs · streaming web UI · eval harness · full observability.</p>
+Tool-using LangGraph agent · deep research · gated self-extension (skills · subagents · tools) · sandboxed shell · advanced RAG · persistent + graph memory · MCP · multi-provider LLMs · streaming web UI · eval harness · full observability.</p>
 
 <p>
   <img src="https://img.shields.io/badge/License-MIT-7C5CF0?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/badge/Version-1.4-7C5CF0?style=for-the-badge" alt="Version 1.4" />
-  <img src="https://img.shields.io/badge/Tests-40%20passing-7C5CF0?style=for-the-badge" alt="Tests 40 passing" />
+  <img src="https://img.shields.io/badge/Version-1.8-7C5CF0?style=for-the-badge" alt="Version 1.8" />
+  <img src="https://img.shields.io/badge/Tests-143%20passing-7C5CF0?style=for-the-badge" alt="Tests 143 passing" />
+  <img src="https://img.shields.io/github/actions/workflow/status/vigoroth/Argus/ci.yml?branch=main&style=for-the-badge&label=CI&color=7C5CF0" alt="CI" />
   <img src="https://img.shields.io/badge/Local--first-100%25-7C5CF0?style=for-the-badge" alt="Local-first" />
 </p>
 
@@ -60,6 +61,14 @@ Argus is an autonomous AI agent that can:
 - **Search and fetch the web** — `web_search` (DuckDuckGo, no API key) to find pages; the MCP `fetch` server to read a specific URL.
 - **Answer from your own documents** — advanced RAG: hybrid search (semantic + keyword), Reciprocal Rank Fusion, cross-encoder reranking, and LLM query expansion, with citations.
 - **Remember you** — short-term conversation memory (per thread), long-term memory (Postgres), plus a knowledge-graph memory: conversations are written to an Obsidian vault and graphify builds a queryable graph over them, exposed to the agent through the native `graph_query` tool. Memory is verified by an eval harness.
+- **Run deep research** — a dedicated pipeline (Research mode): planner decomposes the question, a human approves/edits the sub-questions, parallel ReAct researchers work in isolated contexts, and a synthesizer merges findings into one cited report.
+- **Manage your calendar** — a local SQLite calendar with agent tools (add/list/find/delete), a month-view UI, `.ics` export, and upcoming events injected as reminders each turn.
+- **Extend itself, safely** — loadable **skills** (`SKILL.md`, progressive disclosure), **subagents** (`AGENT.md` + tool allowlists, e.g. the built-in data-analyst), and agent-drafted skills/tools that wait in a human approval queue (the Skills tab shows drafts and code for review) before they ever load — a two-tier capability firewall.
+- **Analyze your data** — drop CSV/Excel/SQLite files in the Data tab; the data-analyst subagent profiles, cleans, and reports with pandas.
+- **Pull new local models from the UI** — Ollama registry or Hugging Face GGUFs (`hf.co/org/repo:quant`) with live download progress; delete from the same list.
+- **Enforce policy with hooks** — a deterministic lifecycle layer (context injection each turn, tool-call gates that fail closed, uniform tool logging) that the model cannot bypass.
+- **Contain the shell** — the agent's `run_shell` runs in a bubblewrap user-namespace sandbox: filesystem read-only outside `data/` and `/tmp`, no network, isolated PIDs.
+- **Drive its own development** — a Claude Code tab opens a repo-scoped coding session over a PTY WebSocket.
 - **Be protected** — the web UI sits behind a username + password login gate (bcrypt-hashed credentials, signed session cookies).
 - **Monitor itself** — every run records latency, tokens, cost, and success to Postgres, surfaced in the built-in `/stats` dashboard.
 - **Chat like a real app** — streaming web UI with a conversation sidebar; past chats persist and reopen.
@@ -77,9 +86,23 @@ Argus is an autonomous AI agent that can:
 │  Agent core (async LangGraph ReAct loop)                  │
 │     ├─ Provider layer: OpenAI · Ollama · Anthropic ·      │
 │     │                   Gemini (per-request selectable)   │
-│     ├─ Built-in tools: shell · web search · document      │
-│     │        search (RAG) · memory · graph_query          │
+│     ├─ Built-in tools: shell (sandboxed) · web search ·   │
+│     │        RAG · memory · graph_query · calendar ·      │
+│     │        skills · spawn_agent · metrics · ideas       │
+│     ├─ Hooks: session_start context · pre_tool_use gates  │
+│     │        (fail-closed) · post_tool_use logging        │
 │     └─ MCP tools (config-driven, curated allowlist)       │
+├──────────────────────────────────────────────────────────┤
+│  Deep research (Research mode): plan → human approval →   │
+│     parallel researchers (Send fan-out) → cited synthesis │
+├──────────────────────────────────────────────────────────┤
+│  Self-extension (capability firewall):                    │
+│     skills/ SKILL.md (progressive disclosure) ·           │
+│     agents/ AGENT.md + tool allowlists ·                  │
+│     agent drafts → pending queue → human review → live    │
+├──────────────────────────────────────────────────────────┤
+│  Sandbox (bubblewrap userns): RO filesystem outside       │
+│     data/ + /tmp · no network · isolated PIDs             │
 ├──────────────────────────────────────────────────────────┤
 │  MCP servers (stdio subprocesses)                         │
 │     ├─ fetch        — read web pages                      │
@@ -138,11 +161,15 @@ Each case has a per-case timeout so a stuck run fails cleanly rather than hangin
 
 ### Unit tests
 
-Fast, service-free unit tests (pricing, config, chunking, RRF fusion, auth, provider dispatch) live in `tests/` and run without Postgres or API keys:
+143 fast, service-free tests live in `tests/` — the ReAct loop (scripted-LLM harness),
+every web endpoint behind the auth wall, WS auth gating, the hooks registry, the
+sandbox's isolation properties (probed live), skills/toolgate/subagent stores, calendar,
+uploads, research plan parsing, and the classics (pricing, config, chunking, RRF, auth).
+No Postgres or API keys needed; the same suite runs in CI on every push.
 
 ```bash
 pip install -e . --group dev   # pytest/ruff
-pytest                         # unit suite (DB-dependent tests skip if psycopg absent)
+python -m pytest -q
 ruff check .
 ```
 
@@ -162,7 +189,10 @@ ruff check .
 | Memory | LangGraph async SQLite checkpointer (short) · Postgres (long) · Obsidian vault + graphify graph (MCP) |
 | Web backend | FastAPI + SSE (async) |
 | Auth | bcrypt + itsdangerous signed cookies |
+| Sandbox | bubblewrap (user namespaces): RO fs, no net, PID isolation for `run_shell` |
+| Extensibility | skills (`SKILL.md`) · subagents (`AGENT.md`) · gated agent-written tools (hot-loaded post-review) |
 | Observability | Custom metrics → Postgres → built-in `/stats` view + auto-provisioned Grafana dashboard |
+| CI | GitHub Actions: pytest + ruff + frontend build on every push/PR |
 | Infrastructure | Docker Compose |
 
 ---
@@ -276,14 +306,20 @@ The server binds **127.0.0.1** by default because the built-in Terminal is a rea
 shell on the host (login-gated). Set `ARGUS_BIND=0.0.0.0` to expose on the LAN —
 only with strong credentials.
 
-**Security / trust model.** Two paths grant host command execution, gated by the
-single-password login **and** the localhost-only bind:
-- **Terminal tab** (`/term`) — an intentionally unrestricted PTY (`bash -l`) for
-  *you*. Disabled entirely on a non-local bind unless `ARGUS_TERM_ALLOW_REMOTE=1`.
-- **`run_shell` agent tool** — LLM-driven, so it carries a destructive-command
-  **guardrail** (refuses `rm -rf`, `mkfs`, `dd` to a device, `shutdown`, fork
-  bombs, …) and a 30s timeout. This is defense-in-depth, **not a sandbox** — treat
-  the login password as the real boundary and don't expose the app untrusted.
+**Security / trust model.** Command-execution paths, gated by the single-password
+login **and** the localhost-only bind:
+- **Terminal tab** (`/term`) and **Claude Code tab** (`/claude`) — intentionally
+  unrestricted PTYs for *you*. Disabled entirely on a non-local bind unless
+  `ARGUS_TERM_ALLOW_REMOTE=1`.
+- **`run_shell` agent tool** — LLM-driven, so it runs inside a **bubblewrap
+  sandbox**: filesystem read-only outside `data/` and a per-call `/tmp`, no
+  network, isolated PIDs, 30s timeout. A destructive-command denylist remains as
+  a fast first filter, and a fail-closed `pre_tool_use` hook re-enforces it at
+  the graph layer. Without usable bwrap the tool falls back to the old
+  guardrail-only mode with a loud warning (`ARGUS_SANDBOX=off` to opt out).
+- **Anything the agent writes for itself** (skills = instructions, tools = code)
+  is inert until reviewed and approved in the Skills tab — pending drafts are
+  never indexed, never imported.
 
 ---
 
@@ -310,6 +346,17 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Activity log (tool calls / results streamed live and persisted per conversation)
 - [x] Conversation summarization for long threads (running summary + checkpoint pruning)
 - [x] Containerize the app itself (one-command full stack)
+- [x] Deep-research mode (plan → human approval → parallel researchers → cited synthesis)
+- [x] Local calendar (agent tools + month-view UI + `.ics` export)
+- [x] Claude Code tab (repo-scoped coding session over a PTY WebSocket)
+- [x] Skills system + agent factory with a human approval firewall (skills, subagents, gated agent-written tools)
+- [x] Local model manager (pull Ollama / Hugging Face GGUF models from the UI with progress)
+- [x] Hooks: deterministic lifecycle layer (context injection, fail-closed tool gates, uniform logging)
+- [x] Data tab: file uploads analyzed by the data-analyst subagent
+- [x] Sandboxed `run_shell` (bubblewrap user namespaces)
+- [x] CI (GitHub Actions) + core test coverage (143 tests)
+- [ ] Notifications + recurring calendar events
+- [ ] RAG quality: streaming retrieval + rerank ablation with measured recall@k
 
 ---
 
@@ -318,11 +365,14 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 Built from scratch by **Nick Kantiotis** — [@vigoroth](https://github.com/vigoroth).
 
 Argus is a solo, from-the-ground-up exploration of production-shaped agent engineering:
-the async LangGraph ReAct loop, a full advanced-RAG pipeline (hybrid retrieval → RRF →
-cross-encoder rerank → citations), three-tier memory (checkpointer · Postgres · graphify
-knowledge graph), MCP tool integration, a multi-provider LLM layer, a login-gated
-streaming React UI, an eval harness, and end-to-end observability — all wired together and
-containerized as one local-first stack. Sole author and contributor.
+the async LangGraph ReAct loop, deep-research orchestration with human-in-the-loop
+approval, a self-extension system behind a capability firewall (skills, subagents,
+gated agent-written tools), a hooks lifecycle layer, a bubblewrap-sandboxed shell, a
+full advanced-RAG pipeline (hybrid retrieval → RRF → cross-encoder rerank → citations),
+three-tier memory (checkpointer · Postgres · graphify knowledge graph), MCP tool
+integration, a multi-provider LLM layer with in-UI model pulling, a login-gated
+streaming React UI, an eval harness, CI, and end-to-end observability — all wired
+together and containerized as one local-first stack. Sole author and contributor.
 
 <a href="https://github.com/vigoroth"><img src="https://img.shields.io/badge/GitHub-@vigoroth-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub @vigoroth" /></a>
 
