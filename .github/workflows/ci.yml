@@ -19,8 +19,14 @@ jobs:
           cache-dependency-path: pyproject.toml
       # CPU-only torch first: the default PyPI wheels drag ~8 GB of CUDA deps
       # (sentence-transformers -> torch) that runners neither need nor fit.
+      # Retry loop: the pytorch CDN has intermittent SSL outages.
       - name: Install torch (cpu)
-        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+        run: |
+          for i in 1 2 3 4; do
+            pip install torch --index-url https://download.pytorch.org/whl/cpu && exit 0
+            echo "pytorch CDN failed (attempt $i), retrying in 60s…"; sleep 60
+          done
+          exit 1
       - name: Install project
         run: |
           pip install -e .
