@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    env:
+      LANGCHAIN_TRACING_V2: "false"   # no tracing noise/keys in CI
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      # CPU-only torch first: the default PyPI wheels drag ~8 GB of CUDA deps
+      # (sentence-transformers -> torch) that runners neither need nor fit.
+      - name: Install torch (cpu)
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install project
+        run: |
+          pip install -e .
+          pip install --group pyproject.toml:dev
+      - name: Ruff
+        run: ruff check .
+      - name: Tests
+        run: python -m pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/web/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/web/frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
