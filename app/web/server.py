@@ -122,6 +122,40 @@ async def models():
     return await list_all_models()
 
 
+# ── local model management (Upgrade 008): pull/delete via the Ollama API ──
+
+class PullModelRequest(BaseModel):
+    name: str  # ollama name (llama3.2:3b) or HF GGUF (hf.co/org/repo:Q4_K_M)
+
+
+@app.post("/models/pull", dependencies=[Depends(require_auth)])
+async def models_pull(req: PullModelRequest):
+    """Download a model through Ollama, streaming progress as SSE.
+    Covers both the Ollama registry and Hugging Face GGUF repos (hf.co/...)."""
+    from app.web.model_manager import pull_model_events, valid_model_name
+    name = req.name.strip()
+    if not valid_model_name(name):
+        raise HTTPException(status_code=400, detail="invalid model name")
+
+    async def gen():
+        async for ev in pull_model_events(name):
+            yield {"event": "progress", "data": json.dumps(ev)}
+            if "error" in ev:
+                return
+        yield {"event": "done", "data": ""}
+
+    return EventSourceResponse(gen())
+
+
+@app.delete("/models/{name:path}", dependencies=[Depends(require_auth)])
+async def models_delete(name: str):
+    """Remove a local Ollama model (path converter: hf.co names contain slashes)."""
+    from app.web.model_manager import delete_model, valid_model_name
+    if not valid_model_name(name):
+        raise HTTPException(status_code=400, detail="invalid model name")
+    return {"ok": await delete_model(name)}
+
+
 # persistent async checkpointer for per-conversation memory (built lazily)
 Path("data").mkdir(exist_ok=True)  # sqlite checkpointer dir (gitignored, absent on fresh clones)
 _checkpointer_cm = AsyncSqliteSaver.from_conn_string("data/web_memory.sqlite")

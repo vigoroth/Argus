@@ -65,6 +65,31 @@ export const approveTool = (name: string) =>
 export const rejectTool = (name: string) =>
   postJson<{ ok: boolean }>(`/tools/${name}/reject`, {})
 
+// ── local model management (Ollama) ──
+export type PullProgress = { status?: string; completed?: number; total?: number; error?: string }
+export function pullModel(name: string, onProgress: (p: PullProgress) => void,
+                          onDone: () => void, onError: (e: string) => void) {
+  return fetchEventSource('/models/pull', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+    openWhenHidden: true,
+    onmessage(ev) {
+      if (ev.event === 'progress') {
+        const p: PullProgress = JSON.parse(ev.data)
+        if (p.error) onError(p.error)
+        else onProgress(p)
+      } else if (ev.event === 'done') onDone()
+    },
+    onerror(err) { onError(String(err)); throw err },
+  })
+}
+export const deleteModel = async (name: string) => {
+  const r = await fetch('/models/' + name, { method: 'DELETE' })
+  if (r.status === 401 || r.redirected) { window.location.href = '/login'; throw new Error('auth') }
+  return r.json() as Promise<{ ok: boolean }>
+}
+
 export type StreamHandlers = {
   onConversation: (id: string) => void
   onToken: (t: string) => void
