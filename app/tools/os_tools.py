@@ -1,5 +1,4 @@
 import re
-import subprocess
 from pathlib import Path
 
 from langchain_core.tools import tool
@@ -68,29 +67,19 @@ def list_dir(path :str) -> str:
 @tool
 def run_shell(command: str) -> str:
     """Run a shell command and return its stdout and stderr.
-    Use for tasks like counting lines, searching files, or running scripts.
+    Runs in a sandbox: the filesystem is read-only except the repo's data/
+    directory and /tmp, and there is NO network access. Use for counting
+    lines, searching files, running local scripts/analysis (python -c works).
     NEVER run destructive commands like rm -rf.
     """
     if _is_destructive(command):
         return ("REFUSED: this command matches a destructive-command guardrail "
                 "(e.g. rm -rf, mkfs, dd to a device, shutdown, fork bomb) and was "
                 "not run. Rephrase to a safe, specific, non-destructive command.")
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        output = result.stdout
-        if result.stderr:
-            output += f"\nSTDERR: {result.stderr}"
-        return output or "(no output)"
-    except subprocess.TimeoutExpired:
-        return "ERROR: command timed out after 30 seconds"
-    except Exception as e:
-        return f"ERROR: {e}"
+    # denylist above = cheap first filter; the sandbox is the real boundary
+    # (RO filesystem outside data//tmp, no net, namespaced PIDs — see app.core.sandbox)
+    from app.core.sandbox import run_sandboxed
+    return run_sandboxed(command)
 
 # Full catalog of filesystem tools. The agent loop (app.agent.graph) binds only
 # read_file, list_dir, and run_shell — write_file is intentionally NOT given to the
