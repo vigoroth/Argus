@@ -11,6 +11,7 @@ load_dotenv()
 
 import asyncio
 import json
+import os
 import time
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
@@ -186,15 +187,16 @@ async def get_graph(model: str | None = None, provider: str | None = None,
     return GRAPHS[key]
 
 
-init_tables()
-init_metrics_table()
-init_activity_table()
-init_memory_table()
-init_secrets_table()
 from app.calendar.store import init_calendar_table
 
-init_calendar_table()
-apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
+if os.environ.get("ARGUS_SKIP_DB_INIT") != "1":  # tests/CI: no Postgres available
+    init_tables()
+    init_metrics_table()
+    init_activity_table()
+    init_memory_table()
+    init_secrets_table()
+    init_calendar_table()
+    apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
 
 
 class ChatRequest(BaseModel):
