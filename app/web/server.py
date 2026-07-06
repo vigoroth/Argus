@@ -13,7 +13,7 @@ import asyncio
 import json
 import time
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -383,6 +383,34 @@ def tools_reject(name: str):
     return {"ok": True}
 
 
+# ── uploads (Upgrade 010): files for the data-analyst subagent ──
+
+@app.get("/uploads", dependencies=[Depends(require_auth)])
+def uploads_list():
+    from app.web.uploads import list_uploads
+    return list_uploads()
+
+
+@app.post("/upload", dependencies=[Depends(require_auth)])
+async def upload_file(file: UploadFile):
+    """Store a data file (csv/xlsx/json/sqlite/…) under data/uploads/ for analysis."""
+    from app.web.uploads import MAX_UPLOAD_BYTES, allowed, save_upload
+    if not file.filename or not allowed(file.filename):
+        raise HTTPException(status_code=400, detail="unsupported file type")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="file too large (200MB max)")
+    dest = save_upload(file.filename, data)
+    return {"name": dest.name, "size": len(data),
+            "path": str(dest.relative_to(dest.parents[2]))}  # data/uploads/<name>
+
+
+@app.delete("/uploads/{name}", dependencies=[Depends(require_auth)])
+def uploads_delete(name: str):
+    from app.web.uploads import delete_upload
+    return {"ok": delete_upload(name)}
+
+
 def _snippet(value, limit: int = 80) -> str:
     """Compact one-line preview of tool args or a tool result."""
     s = " ".join(str(value).split())
@@ -509,6 +537,9 @@ async def chat(req: ChatRequest):
     conv_id = req.conversation_id or await asyncio.to_thread(create_conversation, req.message)
     await asyncio.to_thread(add_message, conv_id, "user", req.message)
     model_name = req.model or get_settings().llm_model
+    # subagents (spawn_agent) must run on the same model as this turn
+    from app.tools.agent_tools import set_subagent_llm
+    set_subagent_llm(req.model, req.provider)
     graph = await get_graph(req.model, req.provider, mode=req.mode)
     graph_input = ({"question": req.message} if req.mode == "research"
                    else {"messages": [HumanMessage(content=req.message)]})

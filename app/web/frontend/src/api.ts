@@ -84,6 +84,23 @@ export function pullModel(name: string, onProgress: (p: PullProgress) => void,
     onerror(err) { onError(String(err)); throw err },
   })
 }
+// ── uploads for the data-analyst ──
+export type UploadInfo = { name: string; size: number; mtime: number }
+export const getUploads = () => j<UploadInfo[]>('/uploads')
+export const uploadFile = async (file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  const r = await fetch('/upload', { method: 'POST', body: fd })
+  if (r.status === 401 || r.redirected) { window.location.href = '/login'; throw new Error('auth') }
+  if (!r.ok) throw new Error(await r.text())
+  return r.json() as Promise<{ name: string; size: number; path: string }>
+}
+export const deleteUpload = async (name: string) => {
+  const r = await fetch('/uploads/' + encodeURIComponent(name), { method: 'DELETE' })
+  if (r.status === 401 || r.redirected) { window.location.href = '/login'; throw new Error('auth') }
+  return r.json() as Promise<{ ok: boolean }>
+}
+
 export const deleteModel = async (name: string) => {
   const r = await fetch('/models/' + name, { method: 'DELETE' })
   if (r.status === 401 || r.redirected) { window.location.href = '/login'; throw new Error('auth') }

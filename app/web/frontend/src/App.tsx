@@ -12,6 +12,7 @@ const ClaudeCodeView = lazy(() => import('./components/ClaudeCodeView'))
 const KeysView = lazy(() => import('./components/KeysView'))
 const CalendarView = lazy(() => import('./components/CalendarView'))
 const SkillsView = lazy(() => import('./components/SkillsView'))
+const DataView = lazy(() => import('./components/DataView'))
 import type { ActivityEntry, Conversation, Message, ModelsByProvider, StreamHandlers } from './api'
 import { getActivity, getConversations, getMessages, getModels, getStatus, resumeResearch, streamChat } from './api'
 import { ChevronDown } from './components/Icons'
@@ -111,6 +112,15 @@ export default function App() {
     if (isNew) getConversations().then(setConvs).catch(console.error)
   }
 
+  // Data tab "Analyze": jump to chat and hand the file to the data-analyst
+  const analyzeFile = (path: string) => {
+    setView('chat')
+    void send(
+      `Use the data-analyst subagent to analyze ${path}: profile the data, ` +
+      'clean if needed, and report the key findings with numbers.',
+      null, null, 'agent')
+  }
+
   const approvePlan = async (edited: string[]) => {
     if (!convId) return
     setBusy(true)
@@ -168,6 +178,7 @@ export default function App() {
             {view === 'graph' && <GraphView/>}
             {view === 'calendar' && <CalendarView/>}
             {view === 'skills' && <SkillsView/>}
+            {view === 'data' && <DataView onAnalyze={analyzeFile}/>}
             {view === 'stats' && <StatsView/>}
             {view === 'settings' && <KeysView/>}
             {view === 'terminal' && termEnabled && <TerminalView/>}

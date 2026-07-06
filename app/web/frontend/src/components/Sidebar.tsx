@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react'
 import type { Conversation } from '../api'
 import { relTime } from '../api'
-import { Plus, Search, ChatBubble, Globe, Bars, Term, Bot, Key, Calendar, Zap, Menu, ChevronDown, ChevronRight } from './Icons'
+import { Plus, Search, ChatBubble, Globe, Bars, Term, Bot, Key, Calendar, Zap, Database, Menu, ChevronDown, ChevronRight } from './Icons'
 
-export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'claude' | 'settings' | 'calendar' | 'skills'
+export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'claude' | 'settings' | 'calendar' | 'skills' | 'data'
 
 const row: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 13, padding: '9px 11px',
@@ -100,6 +100,8 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
                 onClick={() => onView('calendar')}/>
         <NavRow color="var(--blue)" icon={<Zap/>} label="Skills" active={view === 'skills'}
                 onClick={() => onView('skills')}/>
+        <NavRow color="var(--blue)" icon={<Database/>} label="Data" active={view === 'data'}
+                onClick={() => onView('data')}/>
         <NavRow color="var(--blue)" icon={<Bars/>} label="Stats" active={view === 'stats'}
                 onClick={() => onView('stats')}/>
         <NavRow color="var(--blue)" icon={<Key/>} label="API Keys" active={view === 'settings'}

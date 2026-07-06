@@ -18,6 +18,16 @@ log = get_logger("argus.tools.agents")
 
 MAX_SUBAGENT_STEPS = 25  # recursion cap: a runaway subagent stops, parent survives
 
+# Subagents run on the SAME model/provider as the parent turn. The server sets
+# this per chat request (single-user app; a concurrent different-model chat
+# would race, which is acceptable here and documented).
+_current_llm = {"model": None, "provider": None}
+
+
+def set_subagent_llm(model: str | None, provider: str | None) -> None:
+    _current_llm["model"] = model
+    _current_llm["provider"] = provider
+
 
 @tool
 async def spawn_agent(name: str, task: str) -> str:
@@ -32,7 +42,8 @@ async def spawn_agent(name: str, task: str) -> str:
     tools = resolve_tools(spec["tools"])
     if not tools:
         return f"ERROR: agent {name!r} resolved zero tools — check its AGENT.md."
-    llm = get_llm(streaming=False)
+    llm = get_llm(streaming=False, model=_current_llm["model"],
+                  provider=_current_llm["provider"])
     sub = create_react_agent(llm, tools, prompt=spec["body"])
     try:
         result = await sub.ainvoke(
