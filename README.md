@@ -7,12 +7,13 @@
 <strong><em>Yours for the voyage.</em></strong> ⛵
 
 <p>A self-hosted, local-first AI agent workspace — built from scratch.<br/>
-Tool-using LangGraph agent · advanced RAG · persistent + graph memory · MCP · multi-provider LLMs · streaming web UI · eval harness · full observability.</p>
+Tool-using LangGraph agent · deep research · gated self-extension (skills · subagents · tools) · sandboxed shell · advanced RAG · persistent + graph memory · MCP · multi-provider LLMs · streaming web UI · eval harness · full observability.</p>
 
 <p>
   <img src="https://img.shields.io/badge/License-MIT-7C5CF0?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/badge/Version-1.4-7C5CF0?style=for-the-badge" alt="Version 1.4" />
-  <img src="https://img.shields.io/badge/Tests-40%20passing-7C5CF0?style=for-the-badge" alt="Tests 40 passing" />
+  <img src="https://img.shields.io/badge/Version-1.8-7C5CF0?style=for-the-badge" alt="Version 1.8" />
+  <img src="https://img.shields.io/badge/Tests-143%20passing-7C5CF0?style=for-the-badge" alt="Tests 143 passing" />
+  <img src="https://img.shields.io/github/actions/workflow/status/vigoroth/Argus/ci.yml?branch=main&style=for-the-badge&label=CI&color=7C5CF0" alt="CI" />
   <img src="https://img.shields.io/badge/Local--first-100%25-7C5CF0?style=for-the-badge" alt="Local-first" />
 </p>
 
@@ -59,7 +60,18 @@ Argus is an autonomous AI agent that can:
 - **Connect to the MCP ecosystem** — integrates external Model Context Protocol servers (filesystem, web fetch) alongside its own tools, all through one async agent loop. Tools are curated to keep selection sharp.
 - **Search and fetch the web** — `web_search` (DuckDuckGo, no API key) to find pages; the MCP `fetch` server to read a specific URL.
 - **Answer from your own documents** — advanced RAG: hybrid search (semantic + keyword), Reciprocal Rank Fusion, cross-encoder reranking, and LLM query expansion, with citations.
-- **Remember you** — short-term conversation memory (per thread), long-term memory (Postgres), plus a knowledge-graph memory: conversations are written to an Obsidian vault and graphify builds a queryable graph over them, exposed to the agent through the native `graph_query` tool. Memory is verified by an eval harness.
+- **Use a canonical Second Brain** — short-term conversation state stays per thread,
+  while durable knowledge lives as auditable Markdown commits in the nested
+  `Second Brain/` Git vault. Argus captures only deterministic memory statements,
+  searches a disposable local FTS index, cites wikilinks, and opens notes directly
+  in Obsidian.
+- **Run deep research** — a dedicated pipeline (Research mode): planner decomposes the question, a human approves/edits the sub-questions, parallel ReAct researchers work in isolated contexts, and a synthesizer merges findings into one cited report.
+- **Manage your calendar** — a local SQLite calendar with agent tools (add/list/find/delete), a month-view UI, `.ics` export, and upcoming events injected as reminders each turn.
+- **Extend itself, safely** — loadable **skills** (`SKILL.md`, progressive disclosure), **subagents** (`AGENT.md` + tool allowlists, e.g. the built-in data-analyst), and agent-drafted skills/tools that wait in a human approval queue (the Skills tab shows drafts and code for review) before they ever load — a two-tier capability firewall.
+- **Analyze your data** — drop CSV/Excel/SQLite files in the Data tab; the data-analyst subagent profiles, cleans, and reports with pandas.
+- **Pull new local models from the UI** — Ollama registry or Hugging Face GGUFs (`hf.co/org/repo:quant`) with live download progress; delete from the same list.
+- **Enforce policy with hooks** — a deterministic lifecycle layer (context injection each turn, tool-call gates that fail closed, uniform tool logging) that the model cannot bypass.
+- **Contain the shell** — the agent's `run_shell` runs in a bubblewrap user-namespace sandbox: filesystem read-only outside `data/` and `/tmp`, no network, isolated PIDs.
 - **Be protected** — the web UI sits behind a username + password login gate (bcrypt-hashed credentials, signed session cookies).
 - **Monitor itself** — every run records latency, tokens, cost, and success to Postgres, surfaced in the built-in `/stats` dashboard.
 - **Chat like a real app** — streaming web UI with a conversation sidebar; past chats persist and reopen.
@@ -77,9 +89,23 @@ Argus is an autonomous AI agent that can:
 │  Agent core (async LangGraph ReAct loop)                  │
 │     ├─ Provider layer: OpenAI · Ollama · Anthropic ·      │
 │     │                   Gemini (per-request selectable)   │
-│     ├─ Built-in tools: shell · web search · document      │
-│     │        search (RAG) · memory · graph_query          │
+│     ├─ Built-in tools: shell (sandboxed) · web search ·   │
+│     │        RAG · brain_query · calendar ·               │
+│     │        skills · spawn_agent · metrics · ideas       │
+│     ├─ Hooks: session_start context · pre_tool_use gates  │
+│     │        (fail-closed) · post_tool_use logging        │
 │     └─ MCP tools (config-driven, curated allowlist)       │
+├──────────────────────────────────────────────────────────┤
+│  Deep research (Research mode): plan → human approval →   │
+│     parallel researchers (Send fan-out) → cited synthesis │
+├──────────────────────────────────────────────────────────┤
+│  Self-extension (capability firewall):                    │
+│     skills/ SKILL.md (progressive disclosure) ·           │
+│     agents/ AGENT.md + tool allowlists ·                  │
+│     agent drafts → pending queue → human review → live    │
+├──────────────────────────────────────────────────────────┤
+│  Sandbox (bubblewrap userns): RO filesystem outside       │
+│     data/ + /tmp · no network · isolated PIDs             │
 ├──────────────────────────────────────────────────────────┤
 │  MCP servers (stdio subprocesses)                         │
 │     ├─ fetch        — read web pages                      │
@@ -88,9 +114,8 @@ Argus is an autonomous AI agent that can:
 │  Advanced RAG: expand → hybrid (dense+sparse) → RRF       │
 │                → cross-encoder rerank → cite              │
 ├──────────────────────────────────────────────────────────┤
-│  Memory: short-term (async SQLite checkpointer) · long-   │
-│    term (Postgres) · graph (Obsidian vault + graphify,     │
-│    queried via the graph_query tool)                      │
+│  Memory: short-term async SQLite checkpointer · canonical │
+│    Git-backed Second Brain + disposable FTS5 search index │
 ├──────────────────────────────────────────────────────────┤
 │  Eval harness: single + cross-conversation memory tests   │
 │                with per-case timeouts                     │
@@ -132,17 +157,22 @@ Credentials live in `.env` (`ARGUS_USERNAME`, `ARGUS_PASSWORD_HASH`, `ARGUS_SESS
 Memory is measured, not assumed. The eval harness (`app/eval/`) runs:
 
 - **Single-conversation recall** — a fact stated and recalled within one thread (checkpointer memory).
-- **Cross-conversation recall** — a fact saved in one conversation and recalled in a separate one (long-term Postgres memory).
+- **Cross-conversation recall** — a committed Brain fact recalled in a separate thread.
 
-Each case has a per-case timeout so a stuck run fails cleanly rather than hanging. The current Postgres-memory baseline passes all cases (8/8). The harness is the basis for benchmarking memory backends against each other.
+Each case has a per-case timeout so a stuck run fails cleanly rather than hanging.
+The harness is the basis for comparing canonical-memory retrieval behavior.
 
 ### Unit tests
 
-Fast, service-free unit tests (pricing, config, chunking, RRF fusion, auth, provider dispatch) live in `tests/` and run without Postgres or API keys:
+143 fast, service-free tests live in `tests/` — the ReAct loop (scripted-LLM harness),
+every web endpoint behind the auth wall, WS auth gating, the hooks registry, the
+sandbox's isolation properties (probed live), skills/toolgate/subagent stores, calendar,
+uploads, research plan parsing, and the classics (pricing, config, chunking, RRF, auth).
+No Postgres or API keys needed; the same suite runs in CI on every push.
 
 ```bash
 pip install -e . --group dev   # pytest/ruff
-pytest                         # unit suite (DB-dependent tests skip if psycopg absent)
+python -m pytest -q
 ruff check .
 ```
 
@@ -159,10 +189,13 @@ ruff check .
 | Vector store | Postgres + pgvector |
 | Retrieval | Hybrid (pgvector + Postgres FTS) + RRF + cross-encoder rerank + query expansion |
 | Web search | DuckDuckGo (`ddgs`) |
-| Memory | LangGraph async SQLite checkpointer (short) · Postgres (long) · Obsidian vault + graphify graph (MCP) |
+| Memory | LangGraph async SQLite checkpointer (short) · Git-backed Obsidian Second Brain (canonical) · SQLite FTS5 projection |
 | Web backend | FastAPI + SSE (async) |
 | Auth | bcrypt + itsdangerous signed cookies |
+| Sandbox | bubblewrap (user namespaces): RO fs, no net, PID isolation for `run_shell` |
+| Extensibility | skills (`SKILL.md`) · subagents (`AGENT.md`) · gated agent-written tools (hot-loaded post-review) |
 | Observability | Custom metrics → Postgres → built-in `/stats` view + auto-provisioned Grafana dashboard |
+| CI | GitHub Actions: pytest + ruff + frontend build on every push/PR |
 | Infrastructure | Docker Compose |
 
 ---
@@ -242,17 +275,24 @@ CREATE INDEX IF NOT EXISTS idx_fts ON langchain_pg_embedding USING GIN (fts);
 # servers are declared in mcp_servers.json (uvx/npx resolve on first use; client fail-softs if missing)
 ```
 
-### Knowledge graph (graphify + Obsidian vault)
+### Second Brain (Git + Obsidian)
 ```bash
-pipx install graphifyy              # the graphify CLI
-pipx inject graphifyy openai        # semantic extraction needs the openai client
-mkdir -p "$ARGUS_VAULT_PATH"        # vault graphify indexes (default ~/vault)
+git -C "Second Brain" status
+# In Obsidian: Open folder as vault → <repo>/Second Brain
 ```
-Conversations are written to `$ARGUS_VAULT_PATH` and re-indexed on each turn by
-`refresh_graph` (`app/web/vault_writer.py`), which shells out to `graphify extract`.
-That build calls an LLM, so `OPENAI_API_KEY` must be set in `.env` — the extract
-subprocess inherits the app's environment. The agent reads the graph via the
-`graph_query` tool; the 3D graph view reads it from the `/graph` endpoint.
+Committed Markdown in `Second Brain/` is the source of truth. Argus regenerates
+stage indexes and its local FTS5 search index, creates one Git transaction per
+capture, and refuses writes while unreviewed external edits exist. The Brain tab
+can browse/search notes, open `obsidian://` links, adopt safe Obsidian edits, and
+perform the one-time legacy Postgres-memory import. Remote-provider context
+disclosures are logged locally with note paths and hashes.
+
+Protected transitions use content-addressed proposals. `/ship` and `/harvest`
+produce an exact patch bound to the current Brain commit and target hashes; the
+Audit view shows that patch and requires exact, single-use approval before it is
+committed. The backend watcher debounces safe Obsidian edits, while protected
+edits remain blocked for review. Local Git bundles provide explicit backup and
+restore validation without including credentials or operational databases.
 
 ### Frontend (React + Vite, Odysseus design)
 ```bash
@@ -276,14 +316,19 @@ The server binds **127.0.0.1** by default because the built-in Terminal is a rea
 shell on the host (login-gated). Set `ARGUS_BIND=0.0.0.0` to expose on the LAN —
 only with strong credentials.
 
-**Security / trust model.** Two paths grant host command execution, gated by the
-single-password login **and** the localhost-only bind:
-- **Terminal tab** (`/term`) — an intentionally unrestricted PTY (`bash -l`) for
-  *you*. Disabled entirely on a non-local bind unless `ARGUS_TERM_ALLOW_REMOTE=1`.
-- **`run_shell` agent tool** — LLM-driven, so it carries a destructive-command
-  **guardrail** (refuses `rm -rf`, `mkfs`, `dd` to a device, `shutdown`, fork
-  bombs, …) and a 30s timeout. This is defense-in-depth, **not a sandbox** — treat
-  the login password as the real boundary and don't expose the app untrusted.
+**Security / trust model.** Command-execution paths, gated by the single-password
+login **and** the localhost-only bind:
+- **Terminal tab** (`/term`) — an intentionally unrestricted PTY for *you*.
+  Disabled entirely on a non-local bind unless `ARGUS_TERM_ALLOW_REMOTE=1`.
+- **`run_shell` agent tool** — LLM-driven, so it runs inside a **bubblewrap
+  sandbox**: filesystem read-only outside `data/` and a per-call `/tmp`, no
+  network, isolated PIDs, 30s timeout. A destructive-command denylist remains as
+  a fast first filter, and a fail-closed `pre_tool_use` hook re-enforces it at
+  the graph layer. Without usable bwrap the tool falls back to the old
+  guardrail-only mode with a loud warning (`ARGUS_SANDBOX=off` to opt out).
+- **Anything the agent writes for itself** (skills = instructions, tools = code)
+  is inert until reviewed and approved in the Skills tab — pending drafts are
+  never indexed, never imported.
 
 ---
 
@@ -305,11 +350,21 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Login gate (bcrypt + signed sessions)
 - [x] Eval harness (single + cross-conversation memory)
 - [x] Auto-memory: remember conversations and recall context automatically
-- [x] Obsidian vault + graphify knowledge graph, queried via the graph_query tool
+- [x] Canonical Git-backed Second Brain with Obsidian links and `brain_query`
 - [x] Encrypted API-key dashboard (write-only, login-gated; keys applied live)
 - [x] Activity log (tool calls / results streamed live and persisted per conversation)
 - [x] Conversation summarization for long threads (running summary + checkpoint pruning)
 - [x] Containerize the app itself (one-command full stack)
+- [x] Deep-research mode (plan → human approval → parallel researchers → cited synthesis)
+- [x] Local calendar (agent tools + month-view UI + `.ics` export)
+- [x] Skills system + agent factory with a human approval firewall (skills, subagents, gated agent-written tools)
+- [x] Local model manager (pull Ollama / Hugging Face GGUF models from the UI with progress)
+- [x] Hooks: deterministic lifecycle layer (context injection, fail-closed tool gates, uniform logging)
+- [x] Data tab: file uploads analyzed by the data-analyst subagent
+- [x] Sandboxed `run_shell` (bubblewrap user namespaces)
+- [x] CI (GitHub Actions) + core test coverage (143 tests)
+- [ ] Notifications + recurring calendar events
+- [ ] RAG quality: streaming retrieval + rerank ablation with measured recall@k
 
 ---
 
@@ -318,11 +373,14 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 Built from scratch by **Nick Kantiotis** — [@vigoroth](https://github.com/vigoroth).
 
 Argus is a solo, from-the-ground-up exploration of production-shaped agent engineering:
-the async LangGraph ReAct loop, a full advanced-RAG pipeline (hybrid retrieval → RRF →
-cross-encoder rerank → citations), three-tier memory (checkpointer · Postgres · graphify
-knowledge graph), MCP tool integration, a multi-provider LLM layer, a login-gated
-streaming React UI, an eval harness, and end-to-end observability — all wired together and
-containerized as one local-first stack. Sole author and contributor.
+the async LangGraph ReAct loop, deep-research orchestration with human-in-the-loop
+approval, a self-extension system behind a capability firewall (skills, subagents,
+gated agent-written tools), a hooks lifecycle layer, a bubblewrap-sandboxed shell, a
+full advanced-RAG pipeline (hybrid retrieval → RRF → cross-encoder rerank → citations),
+canonical memory (checkpointer · Git-backed Obsidian Brain · disposable FTS5), MCP tool
+integration, a multi-provider LLM layer with in-UI model pulling, a login-gated
+streaming React UI, an eval harness, CI, and end-to-end observability — all wired
+together and containerized as one local-first stack. Sole author and contributor.
 
 <a href="https://github.com/vigoroth"><img src="https://img.shields.io/badge/GitHub-@vigoroth-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub @vigoroth" /></a>
 

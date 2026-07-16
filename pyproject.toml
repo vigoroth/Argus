@@ -1,6 +1,6 @@
 [project]
 name = "argus"
-version = "1.8.0"
+version = "1.9.0"
 description = "Self-hosted, local-first agent workspace: LangGraph agent, RAG, Postgres memory, MCP, web UI."
 requires-python = ">=3.11"
 dependencies = [
@@ -40,7 +40,6 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.5",
     "python-dotenv>=1.0",
-    "tiktoken>=0.8",
     "cryptography>=43.0",
 ]
 
@@ -65,5 +64,5 @@ select = ["E", "F", "I", "UP", "B"]
 "app/eval/runner.py" = ["E402"]
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+asyncio_mode = "strict"
 testpaths = ["tests"]

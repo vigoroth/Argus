@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,11 +10,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     google_api_key: str = ""
     database_url: str = "postgresql+psycopg://argus:argus_dev_pw@localhost:5434/argus"
-    # ARGUS_VAULT_PATH is the current name; NEXUS_VAULT_PATH still works for back-compat.
-    argus_vault_path: str = Field(
-        default=str(Path.home() / "vault"),
-        validation_alias=AliasChoices("ARGUS_VAULT_PATH", "NEXUS_VAULT_PATH"),
-    )
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
     embed_model: str = "text-embedding-3-small"
@@ -25,6 +20,19 @@ class Settings(BaseSettings):
 
     llm_temperature: float = 0.2
     llm_max_tokens: int = 1024
+    argus_brain_enabled: bool = True
+    argus_brain_path: str = str(Path.cwd() / "Second Brain")
+    argus_brain_auto_capture: bool = True
+    argus_brain_context: bool = True
+    argus_brain_context_notes: int = 4
+    argus_brain_context_chars: int = 6000
+    argus_brain_remote_context: str = "allow"
+    argus_brain_context_providers: str = "openai,anthropic,gemini"
+    argus_brain_disclosure_retention_days: int = 90
+    argus_brain_git_name: str = "Argus Brain"
+    argus_brain_git_email: str = "argus@localhost"
+    argus_brain_watch: bool = True
+    argus_brain_watch_interval: float = 2.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

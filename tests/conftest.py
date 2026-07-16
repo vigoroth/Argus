@@ -22,6 +22,10 @@ for prefix in ("NEXUS", "ARGUS"):
     os.environ[f"{prefix}_PASSWORD_HASH"] = TEST_PASSWORD_HASH
     os.environ[f"{prefix}_SESSION_SECRET"] = TEST_SESSION_SECRET
 
+# Tests import app.web.server (TestClient); skip its Postgres table init so the
+# suite runs without live services (CI has none).
+os.environ["ARGUS_SKIP_DB_INIT"] = "1"
+
 
 @pytest.fixture
 def test_username() -> str:

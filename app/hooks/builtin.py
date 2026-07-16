@@ -39,7 +39,7 @@ def inject_skill_index(state) -> list:
 @hook("session_start")
 def inject_agent_index(state) -> list:
     """Subagents the model can delegate to via spawn_agent."""
-    from app.subagents.loader import agent_index
+    from app.tools.subagents.loader import agent_index
     aidx = agent_index()
     if not aidx:
         return []

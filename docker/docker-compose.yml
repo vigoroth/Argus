@@ -31,11 +31,19 @@ services:
       ARGUS_PASSWORD_HASH: ${ARGUS_PASSWORD_HASH:-}
       ARGUS_SESSION_SECRET: ${ARGUS_SESSION_SECRET:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ARGUS_BRAIN_PATH: /brain
+      ARGUS_BRAIN_ENABLED: ${ARGUS_BRAIN_ENABLED:-true}
+      ARGUS_BRAIN_AUTO_CAPTURE: ${ARGUS_BRAIN_AUTO_CAPTURE:-true}
+      ARGUS_BRAIN_CONTEXT: ${ARGUS_BRAIN_CONTEXT:-true}
+      ARGUS_BRAIN_REMOTE_CONTEXT: ${ARGUS_BRAIN_REMOTE_CONTEXT:-allow}
+      ARGUS_BRAIN_CONTEXT_PROVIDERS: ${ARGUS_BRAIN_CONTEXT_PROVIDERS:-openai,anthropic,gemini}
+      ARGUS_BRAIN_WATCH: ${ARGUS_BRAIN_WATCH:-true}
       # NOTE: the /term shell stays disabled — term_enabled() requires
       # ARGUS_TERM_ALLOW_REMOTE=1 when bind is not localhost, which we do not set.
     volumes:
       - model_cache:/app/model_cache
       - app_data:/app/data
+      - "../Second Brain:/brain"
 
   grafana:
     image: grafana/grafana:latest

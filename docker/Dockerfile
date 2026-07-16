@@ -13,7 +13,7 @@ FROM python:3.11-slim AS runtime
 
 # node (for the MCP filesystem server via npx) + uv (for the MCP fetch server via uvx)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nodejs npm ca-certificates curl \
+        nodejs npm ca-certificates curl git \
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir uv
 
@@ -31,8 +31,9 @@ COPY --from=web /web/dist ./app/web/frontend/dist
 # cache the sentence-transformers reranker model on a mounted volume, not the image layer
 ENV HF_HOME=/app/model_cache \
     SENTENCE_TRANSFORMERS_HOME=/app/model_cache \
-    ARGUS_BIND=0.0.0.0
-RUN mkdir -p /app/model_cache /app/data
+    ARGUS_BIND=0.0.0.0 \
+    ARGUS_BRAIN_PATH=/brain
+RUN mkdir -p /app/model_cache /app/data /brain
 
 EXPOSE 8000
 CMD ["python", "-m", "app.web.server"]

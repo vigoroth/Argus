@@ -37,7 +37,7 @@ export default function ChatView({ messages, streaming, activity }: {
           <div style={{ color: 'var(--muted)', fontSize: 15, letterSpacing: .3 }}>Yours for the voyage.</div>
           <div style={{ color: 'var(--faint)', fontSize: 13, textAlign: 'center', maxWidth: 420,
                         lineHeight: 1.7, marginTop: 14 }}>
-            Tip: the Brain tab shows the knowledge graph of your conversations.
+            Tip: the Brain tab is your canonical Git-backed Obsidian vault.
           </div>
         </div>
       ) : (

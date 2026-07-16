@@ -11,26 +11,13 @@ import fcntl
 import json
 import os
 import pty
-import shutil
 import signal
 import struct
 import termios
-from pathlib import Path
 
 from fastapi import WebSocket
 
 from app.web.auth import COOKIE_NAME, valid_token
-
-# repo root: app/web/term.py -> parents[2] == …/argus
-REPO_ROOT = Path(__file__).resolve().parents[2]
-
-# First message seeded into the Claude Code tab: it kicks off the lab upgrade loop.
-CLAUDE_BOOTSTRAP = (
-    "You're working inside the Argus repo. Read lab/IDEAS.md, pick a 'next' upgrade, "
-    "scaffold it with `python lab/lab.py new \"<title>\"`, implement it, add tests, "
-    "write the upgrade notes.md, then run `python lab/lab.py sync`. "
-    "Ask before each edit or command."
-)
 
 
 def _valid_ws_session(ws: WebSocket) -> bool:
@@ -50,9 +37,7 @@ def term_enabled() -> bool:
 async def _pty_session(ws: WebSocket, argv: list[str], cwd: str) -> None:
     """Bridge a WebSocket to a PTY running `argv` in `cwd`.
 
-    Gating (localhost/auth) is the caller's responsibility. Shared by the bash
-    terminal (/term) and the Claude Code tab (/claude) — same primitive, different
-    command + working directory.
+    Gating (localhost/auth) is the caller's responsibility.
     """
     if not term_enabled():
         await ws.close(code=4404)  # disabled on non-local bind
@@ -128,23 +113,3 @@ async def _pty_session(ws: WebSocket, argv: list[str], cwd: str) -> None:
 async def terminal_ws(ws: WebSocket) -> None:
     """/term — a login bash shell in the user's home directory."""
     await _pty_session(ws, ["bash", "-l"], os.path.expanduser("~"))
-
-
-async def claude_ws(ws: WebSocket) -> None:
-    """/claude — an interactive Claude Code session scoped to the repo, seeded
-    with the lab-upgrade bootstrap. Same shell-equivalent surface as /term, so it
-    inherits the identical localhost/auth gate via _pty_session."""
-    claude_bin = shutil.which("claude")
-    if not claude_bin:
-        # gate first so we don't leak "claude missing" to unauthenticated callers
-        if not term_enabled() or not _valid_ws_session(ws):
-            await ws.close(code=4403)
-            return
-        await ws.accept()
-        await ws.send_text(
-            "\r\n\x1b[31mclaude CLI not found on PATH.\x1b[0m "
-            "Install Claude Code, then reopen this tab.\r\n"
-        )
-        await ws.close()
-        return
-    await _pty_session(ws, [claude_bin, CLAUDE_BOOTSTRAP], str(REPO_ROOT))
