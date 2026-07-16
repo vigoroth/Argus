@@ -9,8 +9,8 @@ from pathlib import Path
 
 from app.skills.loader import _is_slug, parse_skill
 
-# repo root: app/subagents/loader.py -> parents[2] == …/argus
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# repo root: app/tools/subagents/loader.py -> parents[3] == …/argus
+REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENTS_DIR = REPO_ROOT / "agents"
 
 
