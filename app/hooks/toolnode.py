@@ -32,6 +32,11 @@ def make_hooked_tool_node(tools: list):
                 tool_obj = tool_map.get(name)
                 if tool_obj is None:
                     out = f"ERROR: unknown tool {name!r}"
+                elif getattr(tool_obj, "coroutine", None) is None:
+                    # Avoid LangChain's default-executor bridge for synchronous
+                    # tools. On Python 3.13 that executor can prevent the event
+                    # loop from shutting down after an otherwise completed run.
+                    out = tool_obj.invoke(args)
                 else:
                     out = await tool_obj.ainvoke(args)
             except Exception as e:  # a failing tool never sinks the turn

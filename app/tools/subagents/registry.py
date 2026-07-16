@@ -5,8 +5,8 @@ Static registry — a subagent can only ever receive tools that already exist an
 are already trusted. Unknown names are skipped (logged), never guessed.
 """
 from app.core.logging_config import get_logger
+from app.tools.brain_tools import brain_query
 from app.tools.calendar_tools import CALENDAR_TOOLS
-from app.tools.graph_query import graph_query
 from app.tools.idea_tools import add_idea
 from app.tools.metrics_tools import query_metrics
 from app.tools.os_tools import list_dir, read_file, run_shell
@@ -23,7 +23,8 @@ _REGISTRY = {
     "read_file": read_file,
     "list_dir": list_dir,
     "run_shell": run_shell,
-    "graph_query": graph_query,
+    "brain_query": brain_query,
+    "graph_query": brain_query,  # compatibility for existing AGENT.md definitions
     "query_metrics": query_metrics,
     "add_idea": add_idea,
     **{t.name: t for t in CALENDAR_TOOLS},

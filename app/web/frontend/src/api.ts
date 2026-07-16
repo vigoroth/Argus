@@ -36,6 +36,45 @@ export const getSecrets = () => j<SecretStatus>('/secrets')
 export const setSecret = (provider: string, key: string) =>
   postJson<{ ok: boolean }>('/secrets', { provider, key })
 export const getGraph = () => j<{ nodes: never[]; links: never[] }>('/graph')
+export type BrainStatus = {
+  enabled: boolean; path: string; exists: boolean; git: boolean; commit: string | null
+  dirty_paths: string[]; valid: boolean; validation_errors: string[]
+  auto_capture: boolean; context: boolean; obsidian_uri: string | null
+  watcher?: { running: boolean; last_event: string | null; last_commit: string | null;
+              last_error: string | null }
+}
+export type BrainNote = {
+  path: string; stage: string; name?: string; title: string; sha256: string
+  body?: string; excerpt?: string; wikilink?: string; obsidian_uri?: string
+}
+export type BrainProposal = {
+  proposal_id: string; operation: string; state: string; diff_hash: string
+  created_at: string; expires_on: string
+  payload: { paths: string[]; patch: string; provenance: Record<string, string>[] }
+}
+export type BrainAudit = {
+  transactions: { commit: string; timestamp: string; subject: string }[]
+  proposals: BrainProposal[]
+  disclosures: { id: number; ts: string; provider: string; model?: string; paths: string }[]
+  rejections: { id: number; ts: string; source: string; reason: string }[]
+}
+export const getBrainStatus = () => j<BrainStatus>('/brain/status')
+export const getBrainStages = () => j<Record<string, BrainNote[]>>('/brain/stages')
+export const getBrainNote = (stage: string, name: string) =>
+  j<BrainNote>(`/brain/notes/${encodeURIComponent(stage)}/${encodeURIComponent(name)}`)
+export const searchBrain = (q: string) =>
+  j<BrainNote[]>('/brain/search?q=' + encodeURIComponent(q))
+export const captureBrain = (material: string) =>
+  postJson<{ note?: string; captured?: boolean }>('/brain/capture', { material })
+export const adoptBrainEdits = () => postJson<Record<string, unknown>>('/brain/adopt', {})
+export const migrateBrainMemory = () => postJson<Record<string, unknown>>('/brain/migrate', {})
+export const getBrainAudit = () => j<BrainAudit>('/brain/audit')
+export const approveBrainProposal = (id: string, diff_hash: string) =>
+  postJson<Record<string, unknown>>(`/brain/proposals/${encodeURIComponent(id)}/approve`, { diff_hash })
+export const rejectBrainProposal = (id: string, reason: string) =>
+  postJson<BrainProposal>(`/brain/proposals/${encodeURIComponent(id)}/reject`, { reason })
+export const rebuildBrainIndex = () => postJson<{ indexed: number }>('/brain/rebuild-index', {})
+export const validateBrain = () => postJson<{ valid: boolean; errors: string[] }>('/brain/validate', {})
 export const getStats = () => j<Stats>('/stats')
 
 export type CalEvent = { id: number; title: string; start_ts: string; end_ts?: string | null;
@@ -135,7 +174,8 @@ const sseHandlers = (h: StreamHandlers, signal: AbortSignal | undefined, body: u
 
 // POST-based SSE with spec-correct parsing (handles \r\n, retries disabled)
 export function streamChat(
-  body: { message: string; conversation_id: string | null; model: string | null; provider: string | null; mode: string },
+  body: { message: string; conversation_id: string | null; model: string | null; provider: string | null;
+          mode: string; brain_capture?: boolean; brain_context?: boolean },
   h: StreamHandlers, signal?: AbortSignal,
 ) {
   const { _url, ...opts } = sseHandlers(h, signal, body, '/chat')

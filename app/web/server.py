@@ -12,6 +12,7 @@ load_dotenv()
 import asyncio
 import json
 import os
+import re
 import time
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile
@@ -197,6 +198,9 @@ if os.environ.get("ARGUS_SKIP_DB_INIT") != "1":  # tests/CI: no Postgres availab
     init_secrets_table()
     init_calendar_table()
     apply_secrets(GRAPHS)  # load any dashboard-set keys into env + Settings at boot
+    if get_settings().argus_brain_enabled:
+        from app.brain.watcher import start_watcher
+        start_watcher()
 
 
 class ChatRequest(BaseModel):
@@ -205,6 +209,8 @@ class ChatRequest(BaseModel):
     model: str | None = None
     provider: str | None = None
     mode: str = "agent"  # "agent" (tools) | "chat" (plain LLM) | "research" (deep research)
+    brain_capture: bool = True
+    brain_context: bool = True
 
 
 class SecretRequest(BaseModel):
@@ -213,6 +219,78 @@ class SecretRequest(BaseModel):
 
 
 FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+
+
+def _brain_command(message: str) -> dict | None:
+    """Route literal top-level Brain commands without model interpretation."""
+    text = message.strip()
+    if not text.startswith("/"):
+        return None
+    from app.brain.proposals import (
+        approve_proposal,
+        execute_proposal,
+        parse_approval_command,
+    )
+    from app.brain.service import BrainError, query_brain, validate_vault
+    from app.brain.workflows import create_project, propose_harvest, propose_ship
+
+    approval = parse_approval_command(text)
+    if approval:
+        approve_proposal(*approval)
+        return {"command": "approve", "receipt": execute_proposal(approval[0])}
+    if text.startswith("/project "):
+        return {"command": "project", "result": create_project(text[9:].strip())}
+    if text.startswith("/query "):
+        return {"command": "query", "results": query_brain(text[7:].strip())}
+    if text == "/review" or text.startswith("/review "):
+        errors = validate_vault()
+        return {"command": "review", "valid": not errors, "errors": errors}
+    ship = re.fullmatch(r"/ship\s+(\S+)\s+(\S+)(\s+--finish)?", text)
+    if ship:
+        project, artifact = ship.group(1), ship.group(2)
+        return {
+            "command": "ship",
+            "proposal": propose_ship(
+                project,
+                artifact,
+                record=f"Artifact recorded through literal /ship: {artifact}",
+                evidence=f"User identified the already-shipped artifact as `{artifact}`.",
+                finish=bool(ship.group(3)),
+            ),
+        }
+    harvest = re.fullmatch(r"/harvest\s+(\S+)(?:\s+(\S+))?", text)
+    if harvest:
+        project = harvest.group(1).strip("[]")
+        topic = harvest.group(2) or project
+        from app.brain.service import _read_note
+        from app.brain.workflows import _section
+        knowledge = _section(_read_note(f"projects/{project}.md"), "Learnings")
+        if knowledge in {"None.", "- None.", "None recorded."}:
+            raise BrainError("project has no supported learnings to harvest")
+        return {
+            "command": "harvest",
+            "proposal": propose_harvest(project, topic, knowledge),
+        }
+    if text == "/evolve":
+        return {
+            "command": "evolve",
+            "status": "proposal-only",
+            "message": (
+                "Control-plane evolution must be prepared for an out-of-band "
+                "operator; the running Argus process cannot apply it."
+            ),
+        }
+    return None
+
+
+def _command_response(result: dict, conversation_id: str):
+    async def events():
+        text = json.dumps(result, indent=2)
+        await asyncio.to_thread(add_message, conversation_id, "assistant", text)
+        yield {"event": "conversation", "data": conversation_id}
+        yield {"event": "token", "data": text}
+        yield {"event": "done", "data": ""}
+    return EventSourceResponse(events())
 
 
 @app.get("/")
@@ -229,9 +307,11 @@ def index(request: Request):
 @app.get("/status", dependencies=[Depends(require_auth)])
 def status():
     """Lightweight status for the sidebar dot (graph build state)."""
+    from app.brain.service import get_brain_status
     from app.web.term import term_enabled
-    from app.web.vault_writer import graph_build_status
-    return {"graph": graph_build_status(), "term_enabled": term_enabled()}
+    brain = get_brain_status()
+    state = "ready" if brain["valid"] and not brain["dirty_paths"] else "attention"
+    return {"graph": state, "term_enabled": term_enabled()}
 
 
 @app.get("/conversations", dependencies=[Depends(require_auth)])
@@ -272,11 +352,241 @@ def secrets_set(req: SecretRequest):
 
 @app.get("/graph", dependencies=[Depends(require_auth)])
 def knowledge_graph():
-    """Serve the graphify knowledge graph (networkx node-link JSON) over the
-    Obsidian vault, for the 3D graph view. Cached by mtime and capped to the
-    largest communities — see app.tools.graph_query.get_graph_data."""
-    from app.tools.graph_query import get_graph_data
-    return get_graph_data()
+    """Compatibility endpoint for the canonical Second Brain graph."""
+    from app.brain.service import brain_graph
+    return brain_graph()
+
+
+@app.get("/brain/status", dependencies=[Depends(require_auth)])
+def brain_status():
+    from app.brain.service import get_brain_status
+    return get_brain_status()
+
+
+@app.get("/brain/stages", dependencies=[Depends(require_auth)])
+def brain_stages():
+    from app.brain.service import STAGES, list_stage_notes
+    return {stage: list_stage_notes(stage) for stage in STAGES}
+
+
+@app.get("/brain/notes/{stage}/{name}", dependencies=[Depends(require_auth)])
+def brain_note(stage: str, name: str):
+    from app.brain.service import BrainError, read_note
+    try:
+        return read_note(stage, name)
+    except BrainError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@app.get("/brain/search", dependencies=[Depends(require_auth)])
+def brain_search(q: str):
+    from app.brain.service import query_brain
+    return query_brain(q)
+
+
+class BrainCaptureRequest(BaseModel):
+    material: str
+
+
+class BrainProjectRequest(BaseModel):
+    goal: str
+    success_checks: list[str] = []
+
+
+class BrainShipRequest(BaseModel):
+    project: str
+    artifact: str
+    record: str
+    evidence: str
+    result: str = "Not yet known."
+    finish: bool = False
+
+
+class BrainHarvestRequest(BaseModel):
+    project: str
+    topic: str
+    durable_knowledge: str
+    boundaries: str = "None recorded."
+
+
+class BrainApprovalRequest(BaseModel):
+    diff_hash: str
+
+
+class BrainRejectRequest(BaseModel):
+    reason: str
+
+
+class BrainContextPreviewRequest(BaseModel):
+    question: str
+    provider: str
+    model: str | None = None
+
+
+class BrainPurgeRequest(BaseModel):
+    before: str
+
+
+class BrainBackupRequest(BaseModel):
+    destination: str | None = None
+
+
+@app.post("/brain/capture", dependencies=[Depends(require_auth)])
+def brain_capture(req: BrainCaptureRequest):
+    from app.brain.service import BrainError, capture_message
+    try:
+        result = capture_message("Remember this: " + req.material, source="explicit-api")
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+    return result or {"captured": False}
+
+
+@app.post("/brain/adopt", dependencies=[Depends(require_auth)])
+def brain_adopt():
+    from app.brain.service import BrainError, adopt_external_edits
+    try:
+        return adopt_external_edits() or {"adopted": False}
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.post("/brain/migrate", dependencies=[Depends(require_auth)])
+def brain_migrate():
+    from app.brain.service import BrainError, migrate_legacy_memory
+    try:
+        return migrate_legacy_memory()
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.post("/brain/projects", dependencies=[Depends(require_auth)])
+def brain_project(req: BrainProjectRequest):
+    from app.brain.service import BrainError
+    from app.brain.workflows import create_project
+    try:
+        return create_project(req.goal, req.success_checks)
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.post("/brain/ship", dependencies=[Depends(require_auth)])
+def brain_ship(req: BrainShipRequest):
+    from app.brain.service import BrainError
+    from app.brain.workflows import propose_ship
+    try:
+        return propose_ship(
+            req.project,
+            req.artifact,
+            record=req.record,
+            evidence=req.evidence,
+            result=req.result,
+            finish=req.finish,
+        )
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.post("/brain/harvest", dependencies=[Depends(require_auth)])
+def brain_harvest(req: BrainHarvestRequest):
+    from app.brain.service import BrainError
+    from app.brain.workflows import propose_harvest
+    try:
+        return propose_harvest(
+            req.project,
+            req.topic,
+            req.durable_knowledge,
+            req.boundaries,
+        )
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.get("/brain/proposals", dependencies=[Depends(require_auth)])
+def brain_proposals(state: str | None = None):
+    from app.brain.proposals import list_proposals
+    from app.brain.service import BrainError
+    try:
+        return list_proposals(state)
+    except BrainError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
+@app.get("/brain/proposals/{proposal_id}", dependencies=[Depends(require_auth)])
+def brain_proposal(proposal_id: str):
+    from app.brain.proposals import get_proposal
+    from app.brain.service import BrainError
+    try:
+        return get_proposal(proposal_id)
+    except BrainError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+
+
+@app.post("/brain/proposals/{proposal_id}/approve", dependencies=[Depends(require_auth)])
+def brain_proposal_approve(proposal_id: str, req: BrainApprovalRequest):
+    from app.brain.proposals import approve_proposal, execute_proposal
+    from app.brain.service import BrainError
+    try:
+        approve_proposal(proposal_id, req.diff_hash)
+        return execute_proposal(proposal_id)
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.post("/brain/proposals/{proposal_id}/reject", dependencies=[Depends(require_auth)])
+def brain_proposal_reject(proposal_id: str, req: BrainRejectRequest):
+    from app.brain.proposals import reject_proposal
+    from app.brain.service import BrainError
+    try:
+        return reject_proposal(proposal_id, req.reason)
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
+
+
+@app.get("/brain/audit", dependencies=[Depends(require_auth)])
+def brain_audit(limit: int = 100):
+    from app.brain.proposals import list_audit
+    return list_audit(max(1, min(limit, 200)))
+
+
+@app.post("/brain/rebuild-index", dependencies=[Depends(require_auth)])
+def brain_rebuild_index():
+    from app.brain.service import rebuild_index
+    return {"indexed": rebuild_index(force=True)}
+
+
+@app.post("/brain/validate", dependencies=[Depends(require_auth)])
+def brain_validate():
+    from app.brain.service import validate_vault
+    errors = validate_vault()
+    return {"valid": not errors, "errors": errors}
+
+
+@app.post("/brain/context-preview", dependencies=[Depends(require_auth)])
+def brain_context_preview(req: BrainContextPreviewRequest):
+    from app.brain.service import preview_context
+    return preview_context(req.question, req.provider, req.model)
+
+
+@app.post("/brain/disclosures/purge", dependencies=[Depends(require_auth)])
+def brain_disclosures_purge(req: BrainPurgeRequest):
+    from app.brain.service import purge_disclosures
+    return {"deleted": purge_disclosures(req.before)}
+
+
+@app.get("/brain/backup/status", dependencies=[Depends(require_auth)])
+def brain_backup_status():
+    from app.brain.backup import remote_status
+    return remote_status()
+
+
+@app.post("/brain/backup", dependencies=[Depends(require_auth)])
+def brain_backup(req: BrainBackupRequest):
+    from app.brain.backup import create_bundle
+    from app.brain.service import BrainError
+    try:
+        return create_bundle(req.destination)
+    except BrainError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from None
 
 
 @app.get("/stats", dependencies=[Depends(require_auth)])
@@ -337,7 +647,7 @@ def skills_list():
     everything the Skills tab reviews."""
     from app.skills.loader import list_pending, list_skills
     from app.skills.toolgate import list_pending_tools
-    from app.subagents.loader import list_agents
+    from app.tools.subagents.loader import list_agents
     live = [{"name": s["name"], "description": s["description"]} for s in list_skills()]
     pending = [{"name": s["name"], "description": s["description"], "body": s["body"]}
                for s in list_pending()]
@@ -514,21 +824,6 @@ async def _stream_run(graph, graph_input, conv_id: str, model_name: str, label: 
         if save_task:
             await save_task
     yield {"event": "done", "data": ""}
-    if not full_reply:
-        return  # paused at the plan gate — nothing to sync to the vault yet
-    try:
-        from app.web.conversations import list_conversations
-        from app.web.vault_writer import refresh_graph, write_conversation
-
-        def _vault_sync():
-            msgs = get_messages(conv_id)
-            title = next((c["title"] for c in list_conversations()
-                        if c["id"] == conv_id), conv_id)
-            write_conversation(conv_id, title, msgs)
-            refresh_graph()   # non-blocking Popen (debounced)
-        await asyncio.to_thread(_vault_sync)
-    except Exception as e:
-        log.warning("vault write skipped: %s", e)
 
 
 @app.post("/chat", dependencies=[Depends(require_auth)])
@@ -538,13 +833,53 @@ async def chat(req: ChatRequest):
     the client approves via /chat/resume."""
     conv_id = req.conversation_id or await asyncio.to_thread(create_conversation, req.message)
     await asyncio.to_thread(add_message, conv_id, "user", req.message)
+    if req.message.strip().startswith("/"):
+        from app.brain.service import BrainError
+        try:
+            command_result = await asyncio.to_thread(_brain_command, req.message)
+        except BrainError as e:
+            command_result = {"command": "blocked", "error": str(e)}
+        if command_result is not None:
+            return _command_response(command_result, conv_id)
     model_name = req.model or get_settings().llm_model
+    provider_name = req.provider or get_settings().llm_provider
+    brain_context = ""
+    if get_settings().argus_brain_enabled:
+        from app.brain.service import BrainError, capture_message, prepare_context
+        if req.brain_capture:
+            try:
+                captured = await asyncio.to_thread(capture_message, req.message)
+                if captured:
+                    await asyncio.to_thread(
+                        record_activity,
+                        conv_id,
+                        [{"kind": "brain_capture", "text": f"captured → {captured['note']}"}],
+                    )
+            except BrainError as e:
+                await asyncio.to_thread(
+                    record_activity,
+                    conv_id,
+                    [{"kind": "brain_blocked", "text": f"brain capture blocked: {e}"}],
+                )
+        if req.brain_context and req.mode != "research":
+            try:
+                brain_context = await asyncio.to_thread(
+                    prepare_context, req.message, provider_name, model_name
+                )
+            except Exception as e:
+                log.warning("brain context skipped: %s", e)
     # subagents (spawn_agent) must run on the same model as this turn
     from app.tools.agent_tools import set_subagent_llm
     set_subagent_llm(req.model, req.provider)
     graph = await get_graph(req.model, req.provider, mode=req.mode)
-    graph_input = ({"question": req.message} if req.mode == "research"
-                   else {"messages": [HumanMessage(content=req.message)]})
+    graph_input = (
+        {"question": req.message}
+        if req.mode == "research"
+        else {
+            "messages": [HumanMessage(content=req.message)],
+            "brain_context": brain_context,
+        }
+    )
     return EventSourceResponse(
         _stream_run(graph, graph_input, conv_id, model_name, req.mode))
 
@@ -569,10 +904,9 @@ async def chat_resume(req: ResumeRequest):
 
 
 # real local terminal (PTY over WS, auth-gated) — see app/web/term.py
-from app.web.term import claude_ws, terminal_ws
+from app.web.term import terminal_ws
 
 app.add_api_websocket_route("/term", terminal_ws)
-app.add_api_websocket_route("/claude", claude_ws)  # Claude Code session in the repo
 
 # hashed asset bundles from the React build (index.html stays auth-gated above)
 if FRONTEND_DIST.exists():

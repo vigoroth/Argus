@@ -23,7 +23,7 @@ from app.agent.research_state import ResearchState
 from app.core.llm import get_llm
 from app.core.logging_config import get_logger
 from app.mcp.client import load_mcp_tools
-from app.tools.graph_query import graph_query
+from app.tools.brain_tools import brain_query
 from app.tools.rag_tool import search_documents
 from app.tools.tavily_search import tavily_search
 from app.tools.web_search import web_search
@@ -43,8 +43,9 @@ PLANNER_SYSTEM = (
 RESEARCHER_SYSTEM = (
     "You are a focused research sub-agent. Research the ONE sub-question you are given "
     "using your tools. Prefer tavily_search; fall back to web_search + fetch to read "
-    "specific pages. Use search_documents for the user's own notes and graph_query for "
-    "past conversations. Gather 2-4 solid sources, then write a concise factual summary "
+    "specific pages. Use search_documents for ingested source documents and brain_query "
+    "for canonical personal knowledge. Gather 2-4 solid sources, then write a concise "
+    "factual summary "
     "(<200 words) that answers the sub-question. ALWAYS list the source URLs you used at "
     "the end under a 'Sources:' line. Do not speculate beyond your sources."
 )
@@ -83,7 +84,7 @@ async def build_research_graph(checkpointer=None, model: str | None = None,
     mcp_tools = await load_mcp_tools()
     fetch_tools = [t for t in mcp_tools if t.name == "fetch"]
     researcher_tools = [tavily_search, web_search, search_documents,
-                        graph_query] + fetch_tools
+                        brain_query] + fetch_tools
 
     # sub-researcher: a self-contained ReAct agent with an isolated context
     researcher_llm = get_llm(streaming=True, model=model, provider=provider)

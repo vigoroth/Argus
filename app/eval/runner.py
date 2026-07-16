@@ -4,28 +4,11 @@ print a pass/fail report. Per-case timeout so a stuck case fails instead of hang
 Run:  python -m app.eval.runner
 """
 import asyncio
-import os
-import shutil
-import subprocess
 import uuid
-from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
-
-# Graph-eval isolation: point the vault at a scratch dir BEFORE any app import
-# resolves settings, and wipe it every run so no graph state leaks between runs
-# (the state-isolation lesson from MEMORY_EVAL.md — a warmed store inflates scores).
-# Must live OUTSIDE the repo: graphify honors .gitignore, and anything under the
-# repo's ignored data/ dir is skipped entirely ("found 0 docs").
-import tempfile
-
-EVAL_VAULT = Path(tempfile.gettempdir()) / "argus_eval_vault"
-os.environ["ARGUS_VAULT_PATH"] = str(EVAL_VAULT)
-if EVAL_VAULT.exists():
-    shutil.rmtree(EVAL_VAULT)
-EVAL_VAULT.mkdir(parents=True)
 
 from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -124,65 +107,11 @@ async def _run_security_case(graph, case) -> tuple[bool, str, str]:
         with _conn() as c:
             c.execute("DELETE FROM user_memory WHERE key = %s", (case.plant_key,))
 
-
-
-
-def _seed_graph_vault(cases: list[CrossConvCase]) -> bool:
-    """Write each case's stored facts into the (freshly wiped) eval vault as
-    conversation notes, then run ONE synchronous graphify extract over it.
-    Returns False (and skips the graph eval) if graphify isn't installed."""
-    graphify = shutil.which("graphify")
-    if not graphify:
-        print("\nGRAPH eval skipped: graphify not on PATH")
-        return False
-    from app.web.vault_writer import write_conversation
-    for case in cases:
-        msgs = []
-        for turn in case.store_turns:
-            msgs.append({"role": "user", "content": turn})
-            msgs.append({"role": "assistant", "content": "Noted — I'll remember that."})
-        write_conversation(case.name, case.name, msgs)
-    print(f"\nGRAPH eval: extracting {len(cases)} seeded conversations "
-          f"(LLM-backed, may take a few minutes) ...")
-    try:
-        # explicit backend: auto-detect picks any backend with an env key set,
-        # even an invalid one (e.g. a stale GOOGLE_API_KEY selects gemini)
-        proc = subprocess.run(
-            [graphify, "extract", str(EVAL_VAULT), "--backend", "openai"],
-            cwd=str(EVAL_VAULT), capture_output=True, text=True, timeout=600,
-        )
-    except subprocess.TimeoutExpired:
-        print("GRAPH eval skipped: graphify extract timed out")
-        return False
-    if proc.returncode != 0:
-        print(f"GRAPH eval skipped: extract failed: {(proc.stderr or proc.stdout)[:300]}")
-        return False
-    return True
-
-
-async def _run_graph_recall_case(graph, case: CrossConvCase) -> tuple[bool, str, str]:
-    """Graph backend: facts were seeded into the vault by _seed_graph_vault;
-    only the recall turn runs, in a fresh thread, with graph_query as the sole
-    memory path (no Postgres tools, no fact injection)."""
-    cfg = {"configurable": {"thread_id": f"eval-graph-{uuid.uuid4().hex[:8]}"}}
-    try:
-        answer = await _invoke(graph, case.recall_turn, cfg)
-    except TimeoutError:
-        return False, f"TIMEOUT (>{CASE_TIMEOUT}s, agent didn't finish)", ""
-    except Exception as e:
-        return False, f"ERROR: {type(e).__name__}: {str(e)[:100]}", ""
-    passed, reason = _score(answer, case)
-    return passed, reason, answer
-
-
 def main() -> None:
     async def all_evals():
         # single-conversation recall: tell the agent a fact, then ask in the same thread
         await _report("MEMORY — SINGLE-CONV", MEMORY_CASES, _run_case)
-        # the comparison: identical cross-conversation cases, each memory backend
-        await _report("CROSS-CONV — POSTGRES", CROSS_CONV_CASES, _run_cross_case, "postgres")
-        if _seed_graph_vault(CROSS_CONV_CASES):
-            await _report("CROSS-CONV — GRAPH", CROSS_CONV_CASES, _run_graph_recall_case, "graph")
+        await _report("CROSS-CONV — CANONICAL BRAIN", CROSS_CONV_CASES, _run_cross_case)
         await _report("MEMORY-INJECTION SECURITY", SECURITY_CASES, _run_security_case)
     asyncio.run(all_evals())
 

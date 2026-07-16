@@ -52,9 +52,18 @@ This is exposed to the agent as a single `search_documents` tool — the whole p
 Two independent layers, both keyed by conversation id:
 
 - **Short-term** — a LangGraph SQLite checkpointer persists the agent's working state per `thread_id`. Reopening a conversation reloads its history into the loop, so the agent remembers earlier turns.
-- **Long-term** — a Postgres key-value table (`user_memory`) holds durable facts. The agent writes to it (`save_memory`) when it learns something lasting, and reads from it (`load_memory`) for context. Survives across all sessions.
+- **Canonical long-term** — the nested Git repository at `Second Brain/` holds
+  Markdown knowledge in `inbox → projects → output → wiki`. Deterministic capture
+  rules create exact-path commits, an SQLite FTS5 index is rebuilt from Git HEAD,
+  and retrieved notes are re-read and hash-verified before model context injection.
+  Postgres `user_memory` is legacy-only and can be imported once from the Brain UI.
+  Protected lifecycle changes are content-addressed proposals bound to base commit,
+  target hashes, exact paths, and a single-use approval. A backend watcher adopts
+  only contract-safe Obsidian edits.
 
-The web layer separately persists conversations and messages in Postgres for the sidebar — display history, distinct from the agent's working memory.
+The web layer separately persists conversations and messages in Postgres for the
+sidebar. Conversation transcripts are display history and are never automatically
+promoted into canonical memory.
 
 ## Web layer
 

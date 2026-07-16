@@ -1,9 +1,9 @@
 import { memo, useMemo, useState } from 'react'
 import type { Conversation } from '../api'
 import { relTime } from '../api'
-import { Plus, Search, ChatBubble, Globe, Bars, Term, Bot, Key, Calendar, Zap, Database, Menu, ChevronDown, ChevronRight } from './Icons'
+import { Plus, Search, ChatBubble, Globe, Bars, Term, Key, Calendar, Zap, Database, Menu, ChevronDown, ChevronRight } from './Icons'
 
-export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'claude' | 'settings' | 'calendar' | 'skills' | 'data'
+export type View = 'chat' | 'graph' | 'stats' | 'terminal' | 'settings' | 'calendar' | 'skills' | 'data'
 
 const row: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 13, padding: '9px 11px',
@@ -93,8 +93,8 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
                 right={<span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ color: 'var(--ph)', fontSize: 12.5 }}>{graphStatus}</span>
                   <span style={{ width: 8, height: 8, borderRadius: '50%',
-                                 background: graphStatus === 'building' ? '#f4bf4f' : 'var(--green)',
-                                 boxShadow: `0 0 6px ${graphStatus === 'building' ? '#f4bf4f88' : '#5fb84f88'}` }}/>
+                                 background: graphStatus === 'attention' ? '#f4bf4f' : 'var(--green)',
+                                 boxShadow: `0 0 6px ${graphStatus === 'attention' ? '#f4bf4f88' : '#5fb84f88'}` }}/>
                 </span>}/>
         <NavRow color="var(--blue)" icon={<Calendar/>} label="Calendar" active={view === 'calendar'}
                 onClick={() => onView('calendar')}/>
@@ -109,10 +109,6 @@ function Sidebar({ convs, activeConv, view, graphStatus, collapsed, termEnabled,
         {termEnabled && (
           <NavRow color="var(--blue)" icon={<Term/>} label="Terminal" active={view === 'terminal'}
                   onClick={() => onView('terminal')}/>
-        )}
-        {termEnabled && (
-          <NavRow color="var(--violet)" icon={<Bot/>} label="Claude Code" active={view === 'claude'}
-                  onClick={() => onView('claude')}/>
         )}
       </nav>
     </aside>

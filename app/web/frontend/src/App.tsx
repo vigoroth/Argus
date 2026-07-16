@@ -6,9 +6,8 @@ import StatsView from './components/StatsView'
 import PlanApproval from './components/PlanApproval'
 
 // heavy views load on demand (three.js / xterm stay out of the initial bundle)
-const GraphView = lazy(() => import('./components/GraphView'))
+const BrainView = lazy(() => import('./components/BrainView'))
 const TerminalView = lazy(() => import('./components/TerminalView'))
-const ClaudeCodeView = lazy(() => import('./components/ClaudeCodeView'))
 const KeysView = lazy(() => import('./components/KeysView'))
 const CalendarView = lazy(() => import('./components/CalendarView'))
 const SkillsView = lazy(() => import('./components/SkillsView'))
@@ -175,14 +174,13 @@ export default function App() {
             </>
           )}
           <Suspense fallback={<div style={{ padding: 40, color: 'var(--muted)' }}>loading ...</div>}>
-            {view === 'graph' && <GraphView/>}
+            {view === 'graph' && <BrainView/>}
             {view === 'calendar' && <CalendarView/>}
             {view === 'skills' && <SkillsView/>}
             {view === 'data' && <DataView onAnalyze={analyzeFile}/>}
             {view === 'stats' && <StatsView/>}
             {view === 'settings' && <KeysView/>}
             {view === 'terminal' && termEnabled && <TerminalView/>}
-            {view === 'claude' && termEnabled && <ClaudeCodeView/>}
           </Suspense>
         </main>
       </div>

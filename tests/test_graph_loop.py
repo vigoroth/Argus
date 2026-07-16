@@ -41,18 +41,20 @@ def no_mcp(monkeypatch):
 def test_plain_graph_message_assembly(monkeypatch):
     fake = FakeLLM([AIMessage(content="hi there")])
     monkeypatch.setattr(graph_mod, "get_llm", lambda **kw: fake)
-    monkeypatch.setattr("app.memory.long_term.recall_all", lambda: {"pet_cat": "Mochi"})
 
     g = _run(build_graph(plain=True))
-    out = _run(g.ainvoke({"messages": [HumanMessage(content="hello")]}))
+    out = _run(g.ainvoke({
+        "messages": [HumanMessage(content="hello")],
+        "brain_context": "[[pet-cat]] Mochi",
+    }))
 
     assert out["messages"][-1].content == "hi there"
     sent = fake.calls[0]
     assert sent[0].content == SYSTEM_PROMPT                       # system first
     joined = "\n".join(str(m.content) for m in sent)
     assert "Current date/time:" in joined                         # session_start hook ran
-    # stored memory injected as explicitly untrusted data, never instructions
-    mem = [m for m in sent if "STORED MEMORY" in str(m.content)]
+    # canonical brain context is injected as untrusted user-role reference data
+    mem = [m for m in sent if "[[pet-cat]]" in str(m.content)]
     assert mem and "Mochi" in mem[0].content and mem[0].type == "human"
 
 

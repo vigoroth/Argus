@@ -11,8 +11,8 @@ from langgraph.prebuilt import create_react_agent
 from app.core.llm import get_llm
 from app.core.logging_config import get_logger
 from app.skills import toolgate
-from app.subagents.loader import get_agent, list_agents
-from app.subagents.registry import resolve_tools
+from app.tools.subagents.loader import get_agent, list_agents
+from app.tools.subagents.registry import resolve_tools
 
 log = get_logger("argus.tools.agents")
 

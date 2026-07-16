@@ -1,5 +1,5 @@
 """Subagent registry: AGENT.md parsing + tool allowlist resolution (Upgrade 006)."""
-from app.subagents import loader, registry
+from app.tools.subagents import loader, registry
 
 
 def _mk_agent(root, name, tools="read_file, list_dir"):

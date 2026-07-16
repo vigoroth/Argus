@@ -60,7 +60,11 @@ Argus is an autonomous AI agent that can:
 - **Connect to the MCP ecosystem** — integrates external Model Context Protocol servers (filesystem, web fetch) alongside its own tools, all through one async agent loop. Tools are curated to keep selection sharp.
 - **Search and fetch the web** — `web_search` (DuckDuckGo, no API key) to find pages; the MCP `fetch` server to read a specific URL.
 - **Answer from your own documents** — advanced RAG: hybrid search (semantic + keyword), Reciprocal Rank Fusion, cross-encoder reranking, and LLM query expansion, with citations.
-- **Remember you** — short-term conversation memory (per thread), long-term memory (Postgres), plus a knowledge-graph memory: conversations are written to an Obsidian vault and graphify builds a queryable graph over them, exposed to the agent through the native `graph_query` tool. Memory is verified by an eval harness.
+- **Use a canonical Second Brain** — short-term conversation state stays per thread,
+  while durable knowledge lives as auditable Markdown commits in the nested
+  `Second Brain/` Git vault. Argus captures only deterministic memory statements,
+  searches a disposable local FTS index, cites wikilinks, and opens notes directly
+  in Obsidian.
 - **Run deep research** — a dedicated pipeline (Research mode): planner decomposes the question, a human approves/edits the sub-questions, parallel ReAct researchers work in isolated contexts, and a synthesizer merges findings into one cited report.
 - **Manage your calendar** — a local SQLite calendar with agent tools (add/list/find/delete), a month-view UI, `.ics` export, and upcoming events injected as reminders each turn.
 - **Extend itself, safely** — loadable **skills** (`SKILL.md`, progressive disclosure), **subagents** (`AGENT.md` + tool allowlists, e.g. the built-in data-analyst), and agent-drafted skills/tools that wait in a human approval queue (the Skills tab shows drafts and code for review) before they ever load — a two-tier capability firewall.
@@ -68,7 +72,6 @@ Argus is an autonomous AI agent that can:
 - **Pull new local models from the UI** — Ollama registry or Hugging Face GGUFs (`hf.co/org/repo:quant`) with live download progress; delete from the same list.
 - **Enforce policy with hooks** — a deterministic lifecycle layer (context injection each turn, tool-call gates that fail closed, uniform tool logging) that the model cannot bypass.
 - **Contain the shell** — the agent's `run_shell` runs in a bubblewrap user-namespace sandbox: filesystem read-only outside `data/` and `/tmp`, no network, isolated PIDs.
-- **Drive its own development** — a Claude Code tab opens a repo-scoped coding session over a PTY WebSocket.
 - **Be protected** — the web UI sits behind a username + password login gate (bcrypt-hashed credentials, signed session cookies).
 - **Monitor itself** — every run records latency, tokens, cost, and success to Postgres, surfaced in the built-in `/stats` dashboard.
 - **Chat like a real app** — streaming web UI with a conversation sidebar; past chats persist and reopen.
@@ -87,7 +90,7 @@ Argus is an autonomous AI agent that can:
 │     ├─ Provider layer: OpenAI · Ollama · Anthropic ·      │
 │     │                   Gemini (per-request selectable)   │
 │     ├─ Built-in tools: shell (sandboxed) · web search ·   │
-│     │        RAG · memory · graph_query · calendar ·      │
+│     │        RAG · brain_query · calendar ·               │
 │     │        skills · spawn_agent · metrics · ideas       │
 │     ├─ Hooks: session_start context · pre_tool_use gates  │
 │     │        (fail-closed) · post_tool_use logging        │
@@ -111,9 +114,8 @@ Argus is an autonomous AI agent that can:
 │  Advanced RAG: expand → hybrid (dense+sparse) → RRF       │
 │                → cross-encoder rerank → cite              │
 ├──────────────────────────────────────────────────────────┤
-│  Memory: short-term (async SQLite checkpointer) · long-   │
-│    term (Postgres) · graph (Obsidian vault + graphify,     │
-│    queried via the graph_query tool)                      │
+│  Memory: short-term async SQLite checkpointer · canonical │
+│    Git-backed Second Brain + disposable FTS5 search index │
 ├──────────────────────────────────────────────────────────┤
 │  Eval harness: single + cross-conversation memory tests   │
 │                with per-case timeouts                     │
@@ -155,9 +157,10 @@ Credentials live in `.env` (`ARGUS_USERNAME`, `ARGUS_PASSWORD_HASH`, `ARGUS_SESS
 Memory is measured, not assumed. The eval harness (`app/eval/`) runs:
 
 - **Single-conversation recall** — a fact stated and recalled within one thread (checkpointer memory).
-- **Cross-conversation recall** — a fact saved in one conversation and recalled in a separate one (long-term Postgres memory).
+- **Cross-conversation recall** — a committed Brain fact recalled in a separate thread.
 
-Each case has a per-case timeout so a stuck run fails cleanly rather than hanging. The current Postgres-memory baseline passes all cases (8/8). The harness is the basis for benchmarking memory backends against each other.
+Each case has a per-case timeout so a stuck run fails cleanly rather than hanging.
+The harness is the basis for comparing canonical-memory retrieval behavior.
 
 ### Unit tests
 
@@ -186,7 +189,7 @@ ruff check .
 | Vector store | Postgres + pgvector |
 | Retrieval | Hybrid (pgvector + Postgres FTS) + RRF + cross-encoder rerank + query expansion |
 | Web search | DuckDuckGo (`ddgs`) |
-| Memory | LangGraph async SQLite checkpointer (short) · Postgres (long) · Obsidian vault + graphify graph (MCP) |
+| Memory | LangGraph async SQLite checkpointer (short) · Git-backed Obsidian Second Brain (canonical) · SQLite FTS5 projection |
 | Web backend | FastAPI + SSE (async) |
 | Auth | bcrypt + itsdangerous signed cookies |
 | Sandbox | bubblewrap (user namespaces): RO fs, no net, PID isolation for `run_shell` |
@@ -272,17 +275,24 @@ CREATE INDEX IF NOT EXISTS idx_fts ON langchain_pg_embedding USING GIN (fts);
 # servers are declared in mcp_servers.json (uvx/npx resolve on first use; client fail-softs if missing)
 ```
 
-### Knowledge graph (graphify + Obsidian vault)
+### Second Brain (Git + Obsidian)
 ```bash
-pipx install graphifyy              # the graphify CLI
-pipx inject graphifyy openai        # semantic extraction needs the openai client
-mkdir -p "$ARGUS_VAULT_PATH"        # vault graphify indexes (default ~/vault)
+git -C "Second Brain" status
+# In Obsidian: Open folder as vault → <repo>/Second Brain
 ```
-Conversations are written to `$ARGUS_VAULT_PATH` and re-indexed on each turn by
-`refresh_graph` (`app/web/vault_writer.py`), which shells out to `graphify extract`.
-That build calls an LLM, so `OPENAI_API_KEY` must be set in `.env` — the extract
-subprocess inherits the app's environment. The agent reads the graph via the
-`graph_query` tool; the 3D graph view reads it from the `/graph` endpoint.
+Committed Markdown in `Second Brain/` is the source of truth. Argus regenerates
+stage indexes and its local FTS5 search index, creates one Git transaction per
+capture, and refuses writes while unreviewed external edits exist. The Brain tab
+can browse/search notes, open `obsidian://` links, adopt safe Obsidian edits, and
+perform the one-time legacy Postgres-memory import. Remote-provider context
+disclosures are logged locally with note paths and hashes.
+
+Protected transitions use content-addressed proposals. `/ship` and `/harvest`
+produce an exact patch bound to the current Brain commit and target hashes; the
+Audit view shows that patch and requires exact, single-use approval before it is
+committed. The backend watcher debounces safe Obsidian edits, while protected
+edits remain blocked for review. Local Git bundles provide explicit backup and
+restore validation without including credentials or operational databases.
 
 ### Frontend (React + Vite, Odysseus design)
 ```bash
@@ -308,9 +318,8 @@ only with strong credentials.
 
 **Security / trust model.** Command-execution paths, gated by the single-password
 login **and** the localhost-only bind:
-- **Terminal tab** (`/term`) and **Claude Code tab** (`/claude`) — intentionally
-  unrestricted PTYs for *you*. Disabled entirely on a non-local bind unless
-  `ARGUS_TERM_ALLOW_REMOTE=1`.
+- **Terminal tab** (`/term`) — an intentionally unrestricted PTY for *you*.
+  Disabled entirely on a non-local bind unless `ARGUS_TERM_ALLOW_REMOTE=1`.
 - **`run_shell` agent tool** — LLM-driven, so it runs inside a **bubblewrap
   sandbox**: filesystem read-only outside `data/` and a per-call `/tmp`, no
   network, isolated PIDs, 30s timeout. A destructive-command denylist remains as
@@ -341,14 +350,13 @@ Then in the UI, pick **Ollama** as the provider and select the model. No code or
 - [x] Login gate (bcrypt + signed sessions)
 - [x] Eval harness (single + cross-conversation memory)
 - [x] Auto-memory: remember conversations and recall context automatically
-- [x] Obsidian vault + graphify knowledge graph, queried via the graph_query tool
+- [x] Canonical Git-backed Second Brain with Obsidian links and `brain_query`
 - [x] Encrypted API-key dashboard (write-only, login-gated; keys applied live)
 - [x] Activity log (tool calls / results streamed live and persisted per conversation)
 - [x] Conversation summarization for long threads (running summary + checkpoint pruning)
 - [x] Containerize the app itself (one-command full stack)
 - [x] Deep-research mode (plan → human approval → parallel researchers → cited synthesis)
 - [x] Local calendar (agent tools + month-view UI + `.ics` export)
-- [x] Claude Code tab (repo-scoped coding session over a PTY WebSocket)
 - [x] Skills system + agent factory with a human approval firewall (skills, subagents, gated agent-written tools)
 - [x] Local model manager (pull Ollama / Hugging Face GGUF models from the UI with progress)
 - [x] Hooks: deterministic lifecycle layer (context injection, fail-closed tool gates, uniform logging)
@@ -369,7 +377,7 @@ the async LangGraph ReAct loop, deep-research orchestration with human-in-the-lo
 approval, a self-extension system behind a capability firewall (skills, subagents,
 gated agent-written tools), a hooks lifecycle layer, a bubblewrap-sandboxed shell, a
 full advanced-RAG pipeline (hybrid retrieval → RRF → cross-encoder rerank → citations),
-three-tier memory (checkpointer · Postgres · graphify knowledge graph), MCP tool
+canonical memory (checkpointer · Git-backed Obsidian Brain · disposable FTS5), MCP tool
 integration, a multi-provider LLM layer with in-UI model pulling, a login-gated
 streaming React UI, an eval harness, CI, and end-to-end observability — all wired
 together and containerized as one local-first stack. Sole author and contributor.

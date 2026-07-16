@@ -16,6 +16,10 @@ app/web/frontend/dist/
 Screenshot*.png
 CLAUDE.md
 
+# Canonical personal-memory vault. It lives physically inside this checkout but
+# owns an independent Git history and is mounted separately in Docker.
+Second Brain/
+
 # private educational upgrade lab (theory, notebooks, brainstorming) — never uploaded
 lab/
 

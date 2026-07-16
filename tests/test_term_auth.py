@@ -38,14 +38,3 @@ def test_ws_rejects_unauthenticated():
         with client.websocket_connect("/term") as ws:
             ws.receive_text()
     assert "4403" in str(exc.value) or getattr(exc.value, "code", None) == 4403
-
-
-def test_ws_claude_rejects_unauthenticated():
-    from starlette.testclient import TestClient
-
-    from app.web.server import app
-    client = TestClient(app)
-    with pytest.raises(Exception) as exc:
-        with client.websocket_connect("/claude") as ws:
-            ws.receive_text()
-    assert "4403" in str(exc.value) or getattr(exc.value, "code", None) == 4403
